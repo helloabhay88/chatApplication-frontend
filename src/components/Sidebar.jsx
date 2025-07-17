@@ -9,7 +9,7 @@ const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const users = await axios.get('https://chat-application-api-theta.vercel.app/chat/users', {
+        const users = await axios.get('https://chatapplication-api.onrender.com/chat/users', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
           }
@@ -32,7 +32,7 @@ const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
 
   const handleUserClick = async (user) => {
     try {
-      const response = await axios.get('https://chat-application-api-theta.vercel.app/chat/message/read/' + user._id, {
+      const response = await axios.get('https://chatapplication-api.onrender.com/chat/message/read/' + user._id, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
         }
@@ -64,7 +64,7 @@ const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
                 onClick={() => handleUserClick(user)}
               >
                 <img
-                  src={`https://chat-application-api-theta.vercel.app/${user.image}`}
+                  src={`https://chatapplication-api.onrender.com/${user.image}`}
                   width="40"
                   height="40"
                   className='rounded-full object-cover'
