@@ -42,7 +42,7 @@ const Chat = ({ socket }) => {
 
     try {
       await axios.post(
-        'http://localhost:3000/chat/message/send/' + receiverId,
+        'https://chat-application-api-theta.vercel.app/chat/message/send/' + receiverId,
         { content: message },
         {
           headers: {

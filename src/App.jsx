@@ -5,7 +5,7 @@ import Register from './components/Register'
 import Chat from './pages/Chat'
 import io from 'socket.io-client'
 
-const socket=io.connect('http://localhost:3000')
+const socket=io.connect('https://chat-application-api-theta.vercel.app')
 function App() {
 
   return (

@@ -20,7 +20,7 @@ const Register = () => {
     }
 
     try {
-      const response = await axios.post('http://localhost:3000/chat/user/register', formData)
+      const response = await axios.post('https://chat-application-api-theta.vercel.app/chat/user/register', formData)
       if (response.data.message === "success") {
         navigate("/")
       }
