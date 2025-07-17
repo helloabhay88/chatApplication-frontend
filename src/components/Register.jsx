@@ -15,7 +15,9 @@ const Register = () => {
     formData.append('email', email)
     formData.append('password', password)
     formData.append('name', name)
-    formData.append('image', file)
+    if(file){
+          formData.append('image', file)
+    }
 
     try {
       const response = await axios.post('http://localhost:3000/chat/user/register', formData)
