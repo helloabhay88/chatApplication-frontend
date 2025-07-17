@@ -13,7 +13,7 @@ const Home = () => {
         const token = localStorage.getItem('chat-token')
         if (!token) return
 
-        const response = await axios.get('http://localhost:3000/chat/user/verify', {
+        const response = await axios.get('https://chat-application-api-theta.vercel.app/chat/user/verify', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -32,7 +32,7 @@ const Home = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      const response = await axios.post('http://localhost:3000/chat/user/', { email, password })
+      const response = await axios.post('https://chat-application-api-theta.vercel.app/chat/user/', { email, password })
       if (response.data.message === "success") {
         localStorage.setItem('chat-token', response.data.token)
         localStorage.setItem('userId', response.data.user.id)
