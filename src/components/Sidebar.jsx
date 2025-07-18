@@ -15,6 +15,7 @@ const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
           }
         })
         setUsers(users.data.users)
+        console.log(users)
       } catch (error) {
         navigate('/')
         console.log(error)
@@ -64,7 +65,8 @@ const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
                 onClick={() => handleUserClick(user)}
               >
                 <img
-                  src={`https://chatapplication-api.onrender.com/${user.image}`}
+                  src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${user.image}`}
+                  
                   width="40"
                   height="40"
                   className='rounded-full object-cover'
