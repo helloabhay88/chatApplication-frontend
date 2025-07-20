@@ -16,7 +16,7 @@ const Chat = ({ socket }) => {
   }, [socket, userId])
 
   useEffect(() => {
-    const handleNewMessage=()=>{
+    const handleNewMessage=(message)=>{
       setMessages((state) => [...state, { sender: message.sender, content: message.content }])
     }
     socket.on("newMessage", handleNewMessage)
