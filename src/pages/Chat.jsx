@@ -24,7 +24,7 @@ const Chat = ({ socket }) => {
     return () => {
       socket.off("newMessage",handleNewMessage)
     }
-  }, [socket,receiverId])
+  }, [socket])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
