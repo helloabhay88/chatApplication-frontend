@@ -16,14 +16,15 @@ const Chat = ({ socket }) => {
   }, [socket, userId])
 
   useEffect(() => {
-    socket.on("newMessage", (message) => {
+    const handleNewMessage=()=>{
       setMessages((state) => [...state, { sender: message.sender, content: message.content }])
-    })
+    }
+    socket.on("newMessage", handleNewMessage)
 
     return () => {
-      socket.off("newMessage")
+      socket.off("newMessage",handleNewMessage)
     }
-  }, [socket])
+  }, [socket],receiverId)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
