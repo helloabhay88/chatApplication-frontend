@@ -1,125 +1,179 @@
-import React, { useEffect, useRef, useState } from 'react'
-import Sidebar from '../components/Sidebar'
-import axios from 'axios'
+import React, { useEffect, useRef, useState } from 'react';
+import Sidebar from '../components/Sidebar';
+import axios from 'axios';
+import { FiMenu } from 'react-icons/fi';
 
 const Chat = ({ socket }) => {
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState([])
-  const [receiverId, setReceiverId] = useState()
-  const userId = window.localStorage.getItem('userId')
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [receiverId, setReceiverId] = useState();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const userId = window.localStorage.getItem('userId');
 
-  const messagesEndRef = useRef(null)
+  const messagesEndRef = useRef(null);
 
+  // Join the socket room when the component mounts or userId/socket changes
   useEffect(() => {
-    socket.emit('join', userId)
-  }, [socket, userId])
-
-  useEffect(() => {
-    const handleNewMessage=(message)=>{
-      setMessages((state) => [...state, { sender: message.sender, content: message.content }])
+    if (socket && userId) {
+      socket.emit('join', userId);
     }
-    socket.on("newMessage", handleNewMessage)
+  }, [socket, userId]);
 
+  // Listen for new messages from the socket
+  useEffect(() => {
+    const handleNewMessage = (message) => {
+      // Only add message if it's for the currently selected user or from the current user
+      if (message.sender === receiverId || message.sender === userId) {
+        setMessages((state) => [...state, { sender: message.sender, content: message.content }]);
+      }
+    };
+    socket.on('newMessage', handleNewMessage);
+
+    // Clean up the event listener when the component unmounts or dependencies change
     return () => {
-      socket.off("newMessage",handleNewMessage)
-    }
-  }, [socket,receiverId])
+      socket.off('newMessage', handleNewMessage);
+    };
+  }, [socket, receiverId, userId]); // Added userId to dependencies for correct filtering
 
+  // Scroll to the latest message whenever messages update
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
+  // Handler for sending messages
   const handleSendMessage = async (e) => {
-    e.preventDefault()
+    e.preventDefault(); // Prevent default form submission
+    if (!message.trim() || !receiverId) return; // Don't send empty messages or if no receiver is selected
 
-    if (!message.trim()) return
-
-    setMessages(prev => [...prev, { content: message, sender: userId }])
-    setMessage('')
+    // Add the sent message to the local state immediately for optimistic UI update
+    setMessages(prev => [...prev, { content: message, sender: userId }]);
+    setMessage(''); // Clear the input field
 
     try {
+      // Make an API call to send the message
       await axios.post(
         'https://chatapplication-api.onrender.com/chat/message/send/' + receiverId,
         { content: message },
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+            'Authorization': `Bearer ${localStorage.getItem('chat-token')}` // Include auth token
           }
         }
-      )
+      );
     } catch (error) {
-      console.log(error)
+      console.error('Error sending message:', error); // Log any errors
+      // Optionally, revert the optimistic update or show an error message to the user
     }
-  }
+  };
 
   return (
     <div className='min-h-screen flex flex-col md:flex-row bg-gray-900 text-gray-200'>
 
-      {/* Sidebar */}
-      <div className='w-full md:w-1/3 bg-gray-800 border-b md:border-r border-gray-700'>
+      {/* Mobile Header with Hamburger - FIXED at the top for small screens */}
+      <div className='md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 rounded-b-lg shadow-lg'>
+        {/* Toggle sidebarOpen state on click */}
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} className='text-white p-2 rounded-full hover:bg-gray-700 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500'>
+          <FiMenu size={24} />
+        </button>
+        <h2 className='text-lg font-semibold truncate max-w-[70%]'>
+          {selectedUser ? `Chat with ${selectedUser.name}` : 'Chat'}
+        </h2>
+        {/* Placeholder to balance the hamburger icon on the left */}
+        <div className="w-8"></div>
+      </div>
+
+      {/* Sidebar - Fixed for mobile, static for desktop */}
+      <div className={`
+        fixed md:static top-0 left-0 h-full w-3/4 sm:w-1/2 md:w-1/3 bg-gray-800 border-r border-gray-700 z-40
+        transform transition-transform duration-300 ease-in-out rounded-r-lg shadow-xl
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0
+      `}>
         <Sidebar
-          onSelectUser={setSelectedUser}
-          setReceiverId={setReceiverId}
-          setMessages={setMessages}
+          onSelectUser={(user) => {
+            setSelectedUser(user);
+            setReceiverId(user._id);
+            // Removed setMessages([]) from here. Messages will now be loaded by Sidebar's handleUserClick.
+            setSidebarOpen(false); // Close sidebar on user selection for mobile
+          }}
+          setReceiverId={setReceiverId} // Pass setReceiverId to Sidebar
+          setMessages={setMessages}     // Pass setMessages to Sidebar
         />
       </div>
 
-      {/* Chat Area */}
-      <div className='w-full md:w-2/3 flex flex-col h-[calc(100vh-0px)]'>
+      {/* Overlay for mobile sidebar - closes sidebar when clicked */}
+      {sidebarOpen && (
+        <div
+          className='fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden'
+          onClick={() => setSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* Chat Area - main content section */}
+      <div className='w-full md:w-2/3 flex flex-col h-screen relative'>
 
         {selectedUser ? (
           <>
-            {/* Chat Header */}
-            <div className='p-4 border-b border-gray-700 bg-gray-800'>
+            {/* Desktop Header - visible only on desktop */}
+            <div className='hidden md:block p-4 border-b border-gray-700 bg-gray-800 rounded-b-lg shadow-md'>
               <h2 className='text-lg sm:text-xl font-semibold'>Chat with {selectedUser.name}</h2>
             </div>
 
-            {/* Chat Messages */}
-            <div className='flex-1 p-3 sm:p-4 overflow-y-auto space-y-2 flex flex-col bg-gray-900'>
+            {/* Chat Messages Display Area */}
+            <div className='flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 flex flex-col bg-gray-900 min-h-0
+                            pt-16 md:pt-0 pb-4'> 
               {messages.map((msg, index) => (
                 <div
                   key={index}
-                  className={`p-2 rounded max-w-[80%] text-sm sm:text-base ${
-                    msg.sender === userId
-                      ? 'bg-blue-600 self-end text-white'
-                      : 'bg-gray-700 self-start text-white'
-                  }`}
+                  className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md
+                              ${msg.sender === userId
+                                  ? 'bg-blue-600 self-end text-white' // Messages sent by current user
+                                  : 'bg-gray-700 self-start text-white' // Messages received from others
+                              }`}
                 >
                   <p>{msg.content}</p>
                 </div>
               ))}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} /> {/* Ref for auto-scrolling to the bottom */}
             </div>
 
-            {/* Message Input */}
-            <form
-              onSubmit={handleSendMessage}
-              className='p-2 sm:p-4 border-t border-gray-700 bg-gray-800 flex flex-col sm:flex-row items-center gap-2'
-            >
-              <input
-                type='text'
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder='Type your message...'
-                className='flex-1 p-2 rounded bg-gray-700 text-white placeholder-gray-400 border border-gray-600 w-full'
-              />
-              <button
-                type='submit'
-                className='bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full sm:w-auto'
-              >
-                Send
-              </button>
-            </form>
+            {/* Message Input Form - positioned relative to chat container */}
+            <div className='flex-shrink-0 p-3 sm:p-4 border-t border-gray-700 bg-gray-800 shadow-lg'>
+              <form onSubmit={handleSendMessage}>
+                <div className='flex items-center gap-3 w-full max-w-4xl mx-auto'>
+                  <input
+                    type='text'
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder='Type your message...'
+                    className='flex-1 p-3 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
+                  />
+                  <button
+                    type='submit'
+                    disabled={!message.trim()}
+                    className='bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 flex-shrink-0'
+                  >
+                    Send
+                  </button>
+                </div>
+              </form>
+            </div>
+
           </>
         ) : (
-          <div className='flex-1 flex items-center justify-center text-gray-400 bg-gray-900'>
-            <p className='text-xl sm:text-2xl font-semibold'>Start a chat</p>
+          // Message displayed when no user is selected
+          <div className='flex-1 flex items-center justify-center text-gray-400 bg-gray-900
+                          pt-16 md:pt-0'>
+            <div className='text-center px-4'>
+              <p className='text-xl sm:text-2xl font-semibold mb-2'>Select a user to start chatting!</p>
+              <p className='text-sm sm:text-base opacity-75'>Choose a contact from the sidebar to begin your conversation</p>
+            </div>
           </div>
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Chat
+export default Chat;
