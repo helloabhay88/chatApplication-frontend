@@ -6,6 +6,7 @@ import Chat from './pages/Chat'
 import io from 'socket.io-client'
 
 const socket=io.connect('https://chatapplication-api.onrender.com/')
+//const socket=io.connect('http://localhost:3000/')
 function App() {
 
   return (

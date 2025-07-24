@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import axios from 'axios';
 import { FiMenu } from 'react-icons/fi';
@@ -11,12 +11,58 @@ const Chat = ({ socket }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const userId = window.localStorage.getItem('userId');
 
+  const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  // Debug log component state
+  console.log('Chat component state:', {
+    socket: !!socket,
+    userId,
+    receiverId,
+    isTyping
+  });
+
+  // Set up typing event listeners
+  useEffect(() => {
+    if (!socket || !userId) {
+      console.log('Socket or userId not available, skipping listener setup');
+      return;
+    }
+
+    console.log('Setting up typing listeners');
+
+    const handleUserTyping = ({ senderId }) => {
+      if (senderId === receiverId) {
+        setIsTyping(true);
+      }
+    };
+
+    const handleUserStopTyping = ({ senderId }) => {
+      if (senderId === receiverId) {
+        setIsTyping(false);
+      }
+    };
+
+    socket.on('userTyping', handleUserTyping);
+    socket.on('userStopTyping', handleUserStopTyping);
+
+    return () => {
+      socket.off('userTyping', handleUserTyping);
+      socket.off('userStopTyping', handleUserStopTyping);
+    };
+  }, [socket, userId, receiverId]); // Include receiverId in dependencies
+
+  // Reset typing state when switching users
+  useEffect(() => {
+    setIsTyping(false);
+  }, [receiverId]);
 
   // Join the socket room when the component mounts or userId/socket changes
   useEffect(() => {
     if (socket && userId) {
       socket.emit('join', userId);
+      console.log('Joined socket room with userId:', userId);
     }
   }, [socket, userId]);
 
@@ -41,10 +87,27 @@ const Chat = ({ socket }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Handler for sending messages
   const handleSendMessage = async (e) => {
     e.preventDefault(); // Prevent default form submission
     if (!message.trim() || !receiverId) return; // Don't send empty messages or if no receiver is selected
+
+    // Clear typing timeout and emit stop typing when sending
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    if (socket && userId && receiverId) {
+      socket.emit('stopTyping', { senderId: userId, receiverId });
+    }
 
     // Add the sent message to the local state immediately for optimistic UI update
     setMessages(prev => [...prev, { content: message, sender: userId }]);
@@ -65,6 +128,24 @@ const Chat = ({ socket }) => {
       console.error('Error sending message:', error); // Log any errors
       // Optionally, revert the optimistic update or show an error message to the user
     }
+  };
+
+  const handleTyping = () => {
+    if (!socket || !userId || !receiverId) {
+      console.log('Cannot emit typing - missing socket, userId, or receiverId');
+      return;
+    }
+
+    console.log('Emitting typing event:', { senderId: userId, receiverId });
+    socket.emit('typing', { senderId: userId, receiverId });
+    
+    // Stop typing after 1.5 seconds of no typing
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      console.log('Emitting stopTyping event:', { senderId: userId, receiverId });
+      socket.emit('stopTyping', { senderId: userId, receiverId });
+    }, 1500);
   };
 
   return (
@@ -122,20 +203,35 @@ const Chat = ({ socket }) => {
 
             {/* Chat Messages Display Area */}
             <div className='flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 flex flex-col bg-gray-900 min-h-0
-                            pt-16 md:pt-0 pb-4'> 
+                pt-16 md:pt-0 pb-4'>
               {messages.map((msg, index) => (
                 <div
                   key={index}
                   className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md
-                              ${msg.sender === userId
-                                  ? 'bg-blue-600 self-end text-white' // Messages sent by current user
-                                  : 'bg-gray-700 self-start text-white' // Messages received from others
-                              }`}
+                  ${msg.sender === userId
+                      ? 'bg-blue-600 self-end text-white'
+                      : 'bg-gray-700 self-start text-white'
+                    }`}
                 >
                   <p>{msg.content}</p>
                 </div>
               ))}
-              <div ref={messagesEndRef} /> {/* Ref for auto-scrolling to the bottom */}
+
+              {/* Typing indicator */}
+              {isTyping && (
+                <div className="self-start max-w-[80%] p-3 rounded-lg bg-gray-700 text-white shadow-md">
+                  <div className="flex items-center space-x-1">
+                    <span className="text-sm italic">{selectedUser.name} is typing</span>
+                    <div className="flex space-x-1 ml-2">
+                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Message Input Form - positioned relative to chat container */}
@@ -145,7 +241,7 @@ const Chat = ({ socket }) => {
                   <input
                     type='text'
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => { setMessage(e.target.value); handleTyping(); }}
                     placeholder='Type your message...'
                     className='flex-1 p-3 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
                   />
