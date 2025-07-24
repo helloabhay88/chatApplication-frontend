@@ -2,7 +2,7 @@ import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
+const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
   const [users, setUsers] = useState([])
   const navigate = useNavigate()
 
@@ -26,9 +26,13 @@ const Sidebar = ({ onSelectUser, setReceiverId, setMessages }) => {
   }, [])
 
   const handleLogout = () => {
+     if (socket) {
+      socket.disconnect(); // Disconnect socket so backend knows user left
+    }
     window.localStorage.removeItem('chat-token')
     window.localStorage.removeItem('userId')
-    navigate('/')
+    window.location.href = '/';
+    
   }
 
   const handleUserClick = async (user) => {

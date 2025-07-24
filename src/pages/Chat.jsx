@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import axios from 'axios';
 import { FiMenu } from 'react-icons/fi';
@@ -10,38 +10,46 @@ const Chat = ({ socket }) => {
   const [receiverId, setReceiverId] = useState();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const userId = window.localStorage.getItem('userId');
+  const [isTyping, setIsTyping] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]); // ✅ added
 
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const [isTyping, setIsTyping] = useState(false);
 
-  // Debug log component state
-  console.log('Chat component state:', {
-    socket: !!socket,
-    userId,
-    receiverId,
-    isTyping
-  });
-
-  // Set up typing event listeners
   useEffect(() => {
-    if (!socket || !userId) {
-      console.log('Socket or userId not available, skipping listener setup');
-      return;
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      console.log("page is visible")
+      socket.emit('user-online', userId);
+    } else {
+      console.log("page is hidden")
+      socket.emit('user-offline', userId);
     }
+  };
 
-    console.log('Setting up typing listeners');
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  // Send status when component mounts (page loaded)
+  if (document.visibilityState === 'visible') {
+    socket.emit('user-online', userId);
+  }
+
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    socket.emit('user-offline', userId); // optional, user leaving page/component
+  };
+}, [socket, userId]);
+
+  // Listen for typing events
+  useEffect(() => {
+    if (!socket || !userId) return;
 
     const handleUserTyping = ({ senderId }) => {
-      if (senderId === receiverId) {
-        setIsTyping(true);
-      }
+      if (senderId === receiverId) setIsTyping(true);
     };
 
     const handleUserStopTyping = ({ senderId }) => {
-      if (senderId === receiverId) {
-        setIsTyping(false);
-      }
+      if (senderId === receiverId) setIsTyping(false);
     };
 
     socket.on('userTyping', handleUserTyping);
@@ -51,43 +59,54 @@ const Chat = ({ socket }) => {
       socket.off('userTyping', handleUserTyping);
       socket.off('userStopTyping', handleUserStopTyping);
     };
-  }, [socket, userId, receiverId]); // Include receiverId in dependencies
+  }, [socket, userId, receiverId]);
 
-  // Reset typing state when switching users
   useEffect(() => {
     setIsTyping(false);
   }, [receiverId]);
 
-  // Join the socket room when the component mounts or userId/socket changes
+  // Join room on mount
   useEffect(() => {
     if (socket && userId) {
       socket.emit('join', userId);
-      console.log('Joined socket room with userId:', userId);
     }
   }, [socket, userId]);
 
-  // Listen for new messages from the socket
+  // ✅ Listen for onlineUsers event
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOnlineUsers = (userIds) => {
+      setOnlineUsers(userIds);
+    };
+
+    socket.on('onlineUsers', handleOnlineUsers);
+
+    return () => {
+      socket.off('onlineUsers', handleOnlineUsers);
+    };
+  }, [socket]);
+
+  // Listen for messages
   useEffect(() => {
     const handleNewMessage = (message) => {
-      // Only add message if it's for the currently selected user or from the current user
       if (message.sender === receiverId || message.sender === userId) {
         setMessages((state) => [...state, { sender: message.sender, content: message.content }]);
       }
     };
+
     socket.on('newMessage', handleNewMessage);
 
-    // Clean up the event listener when the component unmounts or dependencies change
     return () => {
       socket.off('newMessage', handleNewMessage);
     };
-  }, [socket, receiverId, userId]); // Added userId to dependencies for correct filtering
+  }, [socket, receiverId, userId]);
 
-  // Scroll to the latest message whenever messages update
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages,isTyping]);
+  }, [messages, isTyping]);
 
-  // Cleanup typing timeout on unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
@@ -96,75 +115,68 @@ const Chat = ({ socket }) => {
     };
   }, []);
 
-  // Handler for sending messages
   const handleSendMessage = async (e) => {
-    e.preventDefault(); // Prevent default form submission
-    if (!message.trim() || !receiverId) return; // Don't send empty messages or if no receiver is selected
+    e.preventDefault();
+    if (!message.trim() || !receiverId) return;
 
-    // Clear typing timeout and emit stop typing when sending
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    if (socket && userId && receiverId) {
-      socket.emit('stopTyping', { senderId: userId, receiverId });
-    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    socket.emit('stopTyping', { senderId: userId, receiverId });
 
-    // Add the sent message to the local state immediately for optimistic UI update
     setMessages(prev => [...prev, { content: message, sender: userId }]);
-    setMessage(''); // Clear the input field
+    setMessage('');
 
     try {
-      // Make an API call to send the message
       await axios.post(
         'https://chatapplication-api.onrender.com/chat/message/send/' + receiverId,
         { content: message },
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('chat-token')}` // Include auth token
+            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
           }
         }
       );
     } catch (error) {
-      console.error('Error sending message:', error); // Log any errors
-      // Optionally, revert the optimistic update or show an error message to the user
+      console.error('Error sending message:', error);
     }
   };
 
   const handleTyping = () => {
-    if (!socket || !userId || !receiverId) {
-      console.log('Cannot emit typing - missing socket, userId, or receiverId');
-      return;
-    }
+    if (!socket || !userId || !receiverId) return;
 
-    console.log('Emitting typing event:', { senderId: userId, receiverId });
     socket.emit('typing', { senderId: userId, receiverId });
-    
-    // Stop typing after 1.5 seconds of no typing
+
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
     typingTimeoutRef.current = setTimeout(() => {
-      console.log('Emitting stopTyping event:', { senderId: userId, receiverId });
       socket.emit('stopTyping', { senderId: userId, receiverId });
     }, 1500);
   };
 
+  // ✅ Check if selected user is online
+  const isReceiverOnline = selectedUser && onlineUsers.includes(selectedUser._id);
+
   return (
     <div className='min-h-screen flex flex-col md:flex-row bg-gray-900 text-gray-200'>
 
-      {/* Mobile Header with Hamburger - FIXED at the top for small screens */}
+      {/* Mobile Header */}
       <div className='md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 rounded-b-lg shadow-lg'>
-        {/* Toggle sidebarOpen state on click */}
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} className='text-white p-2 rounded-full hover:bg-gray-700 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500'>
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} className='text-white p-2 rounded-full hover:bg-gray-700'>
           <FiMenu size={24} />
         </button>
         <h2 className='text-lg font-semibold truncate max-w-[70%]'>
-          {selectedUser ? `Chat with ${selectedUser.name}` : 'Chat'}
+          {selectedUser ? (
+            <>
+              Chat with {selectedUser.name}
+              <span className={`ml-2 text-sm ${isReceiverOnline ? 'text-green-400' : 'text-gray-400'}`}>
+                ● {isReceiverOnline ? 'Online' : 'Offline'}
+              </span>
+            </>
+          ) : 'Chat'}
         </h2>
-        {/* Placeholder to balance the hamburger icon on the left */}
-        <div className="w-8"></div>
+        <div className="w-8" />
       </div>
 
-      {/* Sidebar - Fixed for mobile, static for desktop */}
+      {/* Sidebar */}
       <div className={`
         fixed md:static top-0 left-0 h-full w-3/4 sm:w-1/2 md:w-1/3 bg-gray-800 border-r border-gray-700 z-40
         transform transition-transform duration-300 ease-in-out rounded-r-lg shadow-xl
@@ -172,18 +184,17 @@ const Chat = ({ socket }) => {
         md:translate-x-0
       `}>
         <Sidebar
+          socket={socket}
           onSelectUser={(user) => {
             setSelectedUser(user);
             setReceiverId(user._id);
-            // Removed setMessages([]) from here. Messages will now be loaded by Sidebar's handleUserClick.
-            setSidebarOpen(false); // Close sidebar on user selection for mobile
+            setSidebarOpen(false);
           }}
-          setReceiverId={setReceiverId} // Pass setReceiverId to Sidebar
-          setMessages={setMessages}     // Pass setMessages to Sidebar
+          setReceiverId={setReceiverId}
+          setMessages={setMessages}
         />
       </div>
 
-      {/* Overlay for mobile sidebar - closes sidebar when clicked */}
       {sidebarOpen && (
         <div
           className='fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden'
@@ -191,24 +202,27 @@ const Chat = ({ socket }) => {
         ></div>
       )}
 
-      {/* Chat Area - main content section */}
+      {/* Main Chat Area */}
       <div className='w-full md:w-2/3 flex flex-col h-screen relative'>
-
         {selectedUser ? (
           <>
-            {/* Desktop Header - visible only on desktop */}
+            {/* Desktop Header */}
             <div className='hidden md:block p-4 border-b border-gray-700 bg-gray-800 rounded-b-lg shadow-md'>
-              <h2 className='text-lg sm:text-xl font-semibold'>Chat with {selectedUser.name}</h2>
+              <h2 className='text-lg sm:text-xl font-semibold'>
+                Chat with {selectedUser.name}
+                <span className={`ml-2 text-sm ${isReceiverOnline ? 'text-green-400' : 'text-gray-400'}`}>
+                  ● {isReceiverOnline ? 'Online' : 'Offline'}
+                </span>
+              </h2>
             </div>
 
-            {/* Chat Messages Display Area */}
-            <div className='flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 flex flex-col bg-gray-900 min-h-0
-                pt-16 md:pt-0 pb-4'>
+            {/* Messages */}
+            <div className='flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 flex flex-col bg-gray-900 min-h-0 pt-16 md:pt-0 pb-4'>
               {messages.map((msg, index) => (
                 <div
                   key={index}
                   className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md
-                  ${msg.sender === userId
+                    ${msg.sender === userId
                       ? 'bg-blue-600 self-end text-white'
                       : 'bg-gray-700 self-start text-white'
                     }`}
@@ -217,24 +231,22 @@ const Chat = ({ socket }) => {
                 </div>
               ))}
 
-              {/* Typing indicator */}
               {isTyping && (
                 <div className="self-start max-w-[80%] p-3 rounded-lg bg-gray-700 text-white shadow-md">
                   <div className="flex items-center space-x-1">
-                    <span className="text-sm italic">{selectedUser.name} is typing</span>
+                    <span className="text-sm italic">typing</span>
                     <div className="flex space-x-1 ml-2">
-                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                     </div>
                   </div>
                 </div>
               )}
-
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Message Input Form - positioned relative to chat container */}
+            {/* Input */}
             <div className='flex-shrink-0 p-3 sm:p-4 border-t border-gray-700 bg-gray-800 shadow-lg'>
               <form onSubmit={handleSendMessage}>
                 <div className='flex items-center gap-3 w-full max-w-4xl mx-auto'>
@@ -243,24 +255,21 @@ const Chat = ({ socket }) => {
                     value={message}
                     onChange={(e) => { setMessage(e.target.value); handleTyping(); }}
                     placeholder='Type your message...'
-                    className='flex-1 p-3 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200'
+                    className='flex-1 p-3 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                   />
                   <button
                     type='submit'
                     disabled={!message.trim()}
-                    className='bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 flex-shrink-0'
+                    className='bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white px-6 py-3 rounded-full'
                   >
                     Send
                   </button>
                 </div>
               </form>
             </div>
-
           </>
         ) : (
-          // Message displayed when no user is selected
-          <div className='flex-1 flex items-center justify-center text-gray-400 bg-gray-900
-                          pt-16 md:pt-0'>
+          <div className='flex-1 flex items-center justify-center text-gray-400 bg-gray-900 pt-16 md:pt-0'>
             <div className='text-center px-4'>
               <p className='text-xl sm:text-2xl font-semibold mb-2'>Select a user to start chatting!</p>
               <p className='text-sm sm:text-base opacity-75'>Choose a contact from the sidebar to begin your conversation</p>
