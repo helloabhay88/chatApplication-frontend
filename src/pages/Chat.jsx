@@ -85,7 +85,7 @@ const Chat = ({ socket }) => {
   // Scroll to the latest message whenever messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages,isTyping]);
 
   // Cleanup typing timeout on unmount
   useEffect(() => {
