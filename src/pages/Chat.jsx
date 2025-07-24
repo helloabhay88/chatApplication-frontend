@@ -166,7 +166,7 @@ const Chat = ({ socket }) => {
         <h2 className='text-lg font-semibold truncate max-w-[70%]'>
           {selectedUser ? (
             <>
-              Chat with {selectedUser.name}
+              {selectedUser.name}
               <span className={`ml-2 text-sm ${isReceiverOnline ? 'text-green-400' : 'text-gray-400'}`}>
                 ● {isReceiverOnline ? 'Online' : 'Offline'}
               </span>
