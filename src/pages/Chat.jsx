@@ -227,7 +227,8 @@ const Chat = ({ socket }) => {
                       : 'bg-gray-700 self-start text-white'
                     }`}
                 >
-                  <p>{msg.content}</p>
+                  <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+
                 </div>
               ))}
 
