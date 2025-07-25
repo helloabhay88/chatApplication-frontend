@@ -17,6 +17,16 @@ const Chat = ({ socket }) => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
+  const interval = setInterval(() => {
+    if (socket && userId) {
+      socket.emit('heartbeat', userId);
+    }
+  }, 5000); // every 5 seconds
+
+  return () => clearInterval(interval);
+}, [socket, userId]);
+
+  useEffect(() => {
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       console.log("page is visible")
