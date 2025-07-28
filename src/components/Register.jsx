@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 const Register = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState('')
   const [file, setFile] = useState(null)
 
@@ -54,12 +56,12 @@ const Register = () => {
             <div className='relative'>
               <input
                 className='p-2 rounded-xl border border-gray-600 bg-gray-900 text-white placeholder-gray-400 w-full'
-                type="password"
+                type={showPassword? 'text' : 'password'}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder='Password'
                 name='password'
               />
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+              {/* <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                 fill="currentColor"
                 className="bi bi-eye absolute top-1/2 right-3 -translate-y-1/2 text-gray-400"
                 viewBox="0 0 16 16">
@@ -72,7 +74,20 @@ const Register = () => {
                 <path d="M8 5.5a2.5 2.5 0 1 0 0 5 
                   2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 
                   0 3.5 3.5 0 0 1-7 0" />
-              </svg>
+              </svg> */}
+               <span
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        cursor: 'pointer',
+                        color:"white"
+                      }}
+                    >
+                      {showPassword ? <FiEyeOff /> : <FiEye />}
+                    </span>
             </div>
             <input
               onChange={(e) => setFile(e.target.files[0])}

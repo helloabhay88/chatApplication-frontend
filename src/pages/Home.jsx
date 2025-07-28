@@ -1,12 +1,14 @@
 import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 const Home = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-
+  const [showPassword,setShowPassword]=useState(false)
+  
   useEffect(() => {
     const verifyUser = async () => {
       try {
@@ -60,16 +62,17 @@ const Home = () => {
             <div className='relative'>
               <input
                 className='p-2 rounded-xl border border-gray-600 bg-gray-900 text-white placeholder-gray-400 w-full'
-                type="password"
+                type={showPassword? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder='Password'
                 name='password'
               />
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+              
+              {/* <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                 fill="currentColor"
                 className="bi bi-eye absolute top-1/2 right-3 -translate-y-1/2 text-gray-400"
-                viewBox="0 0 16 16">
+                viewBox="0 0 16 16" onClick={()=>setShowPassword(!showPassword)}>
                 <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 
                   13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 
                   1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 
@@ -78,7 +81,20 @@ const Home = () => {
                 <path d="M8 5.5a2.5 2.5 0 1 0 0 5 
                   2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 
                   0 3.5 3.5 0 0 1-7 0" />
-              </svg>
+              </svg> */}
+               <span
+        onClick={() => setShowPassword(!showPassword)}
+        style={{
+          position: 'absolute',
+          right: '10px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          cursor: 'pointer',
+          color:"white"
+        }}
+      >
+        {showPassword ? <FiEyeOff /> : <FiEye />}
+      </span>
             </div>
             <button className='bg-orange-500 text-white rounded-xl py-2 hover:bg-orange-600 duration-200'>
               Login
