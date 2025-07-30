@@ -2,13 +2,13 @@ import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FiEye, FiEyeOff } from 'react-icons/fi';
-
+import { ClipLoader } from 'react-spinners'
 const Home = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword,setShowPassword]=useState(false)
-  
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
   useEffect(() => {
     const verifyUser = async () => {
       try {
@@ -34,6 +34,7 @@ const Home = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
+      setLoading(true)
       const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/', { email, password })
       if (response.data.message === "success") {
         localStorage.setItem('chat-token', response.data.token)
@@ -42,6 +43,8 @@ const Home = () => {
       }
     } catch (error) {
       alert(error.response?.data?.message || "Login failed")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -62,13 +65,13 @@ const Home = () => {
             <div className='relative'>
               <input
                 className='p-2 rounded-xl border border-gray-600 bg-gray-900 text-white placeholder-gray-400 w-full'
-                type={showPassword? 'text' : 'password'}
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder='Password'
                 name='password'
               />
-              
+
               {/* <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                 fill="currentColor"
                 className="bi bi-eye absolute top-1/2 right-3 -translate-y-1/2 text-gray-400"
@@ -82,23 +85,28 @@ const Home = () => {
                   2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 
                   0 3.5 3.5 0 0 1-7 0" />
               </svg> */}
-               <span
-        onClick={() => setShowPassword(!showPassword)}
-        style={{
-          position: 'absolute',
-          right: '10px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          cursor: 'pointer',
-          color:"white"
-        }}
-      >
-        {showPassword ? <FiEyeOff /> : <FiEye />}
-      </span>
+              <span
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  cursor: 'pointer',
+                  color: "white"
+                }}
+              >
+                {showPassword ? <FiEyeOff /> : <FiEye />}
+              </span>
             </div>
-            <button className='bg-orange-500 text-white rounded-xl py-2 hover:bg-orange-600 duration-200'>
-              Login
+            <button
+              className="bg-orange-500 text-white rounded-xl py-2 px-4 hover:bg-orange-600 duration-200 flex items-center justify-center gap-2"
+              disabled={loading}
+            >
+              <span>Login</span>
+              {loading && <ClipLoader size={16} color="#fff" />}
             </button>
+
           </form>
 
           <div className='mt-8 grid grid-cols-3 items-center text-orange-400'>

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { FiEye, FiEyeOff } from 'react-icons/fi';
-
+import { ClipLoader } from 'react-spinners'
 const Register = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -10,6 +10,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState('')
   const [file, setFile] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -22,12 +23,15 @@ const Register = () => {
     }
 
     try {
+      setLoading(true)
       const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/register', formData)
       if (response.data.message === "success") {
         navigate("/")
       }
     } catch (error) {
       alert(error.response?.data?.message || "Registration failed")
+    }finally{
+      setLoading(false)
     }
   }
 
@@ -95,9 +99,11 @@ const Register = () => {
               type="file"
             />
             <button
-              className='bg-orange-500 text-white rounded-xl py-2 hover:bg-orange-600 duration-200'
+              className="bg-orange-500 text-white rounded-xl py-2 px-4 hover:bg-orange-600 duration-200 flex items-center justify-center gap-2"
+              disabled={loading}
             >
-              Sign up
+              <span>Sign Up</span>
+              {loading && <ClipLoader size={16} color="#fff" />}
             </button>
           </form>
 
