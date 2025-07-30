@@ -61,7 +61,7 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
 
 
   return (
-    <div className='flex flex-col h-screen p-4 bg-gray-800 text-gray-200'>
+    <div className='flex flex-col h-screen p-4 bg-gray-800 text-gray-200 justify-between'>
       {/* Search and User List */}
       <div className='flex-grow overflow-y-auto'>
         <input
