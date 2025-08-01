@@ -29,10 +29,8 @@ const Chat = ({ socket }) => {
   useEffect(() => {
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
-      console.log("page is visible")
       socket.emit('user-online', userId);
     } else {
-      console.log("page is hidden")
       socket.emit('user-offline', userId);
     }
   };
@@ -221,7 +219,7 @@ const Chat = ({ socket }) => {
               <h2 className='text-lg sm:text-xl font-semibold'>
                 Chat with {selectedUser.name}
                 <span className={`ml-2 text-sm ${isReceiverOnline ? 'text-green-400' : 'text-gray-400'}`}>
-                  ● {isReceiverOnline ? 'Online' : 'Offline'}
+                  ● {isReceiverOnline ? 'online' : 'offline'}
                 </span>
               </h2>
             </div>

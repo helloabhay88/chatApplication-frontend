@@ -6,7 +6,21 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
   const [users, setUsers] = useState([])
   const [filterUsers,setFilterUsers]=useState([])
   const navigate = useNavigate()
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
+  useEffect(() => {
+      if (!socket) return;
+  
+      const handleOnlineUsers = (userIds) => {
+        setOnlineUsers(userIds);
+      };
+  
+      socket.on('onlineUsers', handleOnlineUsers);
+  
+      return () => {
+        socket.off('onlineUsers', handleOnlineUsers);
+      };
+    }, [socket]);
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -86,7 +100,13 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
                   className='rounded-full object-cover'
                   alt={user.email}
                 />
-                <span className='text-gray-200'>{user.name}</span>
+                <div className='flex flex-col'>
+  <span className='text-gray-200'>{user.name}</span>
+  {onlineUsers.includes(user._id) && (
+    <span className='text-green-400 text-sm'>● online</span>
+  )}
+</div>
+
               </div>
             ))}
           </div>
