@@ -121,7 +121,7 @@ const Chat = ({ socket }) => {
       console.log("message seen working")
       setMessages(prev => prev.map(m => m._id === messageId ? { ...m, seen: true } : m))
     })
-  }, [])
+  }, [socket])
 
   // Scroll to bottom
   useEffect(() => {
