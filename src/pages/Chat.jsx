@@ -17,36 +17,36 @@ const Chat = ({ socket }) => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-  const interval = setInterval(() => {
-    if (socket && userId) {
-      socket.emit('heartbeat', userId);
-    }
-  }, 5000); // every 5 seconds
+    const interval = setInterval(() => {
+      if (socket && userId) {
+        socket.emit('heartbeat', userId);
+      }
+    }, 5000); // every 5 seconds
 
-  return () => clearInterval(interval);
-}, [socket, userId]);
+    return () => clearInterval(interval);
+  }, [socket, userId]);
 
   useEffect(() => {
-  const handleVisibilityChange = () => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        socket.emit('user-online', userId);
+      } else {
+        socket.emit('user-offline', userId);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Send status when component mounts (page loaded)
     if (document.visibilityState === 'visible') {
       socket.emit('user-online', userId);
-    } else {
-      socket.emit('user-offline', userId);
     }
-  };
 
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-
-  // Send status when component mounts (page loaded)
-  if (document.visibilityState === 'visible') {
-    socket.emit('user-online', userId);
-  }
-
-  return () => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    socket.emit('user-offline', userId); // optional, user leaving page/component
-  };
-}, [socket, userId]);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      socket.emit('user-offline', userId); // optional, user leaving page/component
+    };
+  }, [socket, userId]);
 
   // Listen for typing events
   useEffect(() => {
@@ -101,6 +101,9 @@ const Chat = ({ socket }) => {
       if (message.sender === receiverId || message.sender === userId) {
         setMessages((state) => [...state, { sender: message.sender, content: message.content }]);
       }
+      if (user.id !== message.sender && message.sender === receiverId) {
+        socket.emit('messageSeen', { messageId: message._id, senderId: message.sender })
+      }
     };
 
     socket.on('newMessage', handleNewMessage);
@@ -109,6 +112,12 @@ const Chat = ({ socket }) => {
       socket.off('newMessage', handleNewMessage);
     };
   }, [socket, receiverId, userId]);
+
+  useEffect(() => {
+    socket.on('messageSeen', ({ messageId }) => {
+      setMessages(prev => prev.map(m => m._id === messageId ? { ...m, seen: true } : m))
+    })
+  }, [])
 
   // Scroll to bottom
   useEffect(() => {
@@ -236,6 +245,11 @@ const Chat = ({ socket }) => {
                     }`}
                 >
                   <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+                  {msg.sender === userId && msg.seen && (
+                    <span className="text-xs text-gray-300 mt-1 block text-right">
+                      ✓ 
+                    </span>
+                  )}
 
                 </div>
               ))}

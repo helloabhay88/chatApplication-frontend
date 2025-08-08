@@ -2,25 +2,25 @@ import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
+const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
   const [users, setUsers] = useState([])
-  const [filterUsers,setFilterUsers]=useState([])
+  const [filterUsers, setFilterUsers] = useState([])
   const navigate = useNavigate()
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   useEffect(() => {
-      if (!socket) return;
-  
-      const handleOnlineUsers = (userIds) => {
-        setOnlineUsers(userIds);
-      };
-  
-      socket.on('onlineUsers', handleOnlineUsers);
-  
-      return () => {
-        socket.off('onlineUsers', handleOnlineUsers);
-      };
-    }, [socket]);
+    if (!socket) return;
+
+    const handleOnlineUsers = (userIds) => {
+      setOnlineUsers(userIds);
+    };
+
+    socket.on('onlineUsers', handleOnlineUsers);
+
+    return () => {
+      socket.off('onlineUsers', handleOnlineUsers);
+    };
+  }, [socket]);
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -41,13 +41,13 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
   }, [])
 
   const handleLogout = () => {
-     if (socket) {
+    if (socket) {
       socket.disconnect(); // Disconnect socket so backend knows user left
     }
     window.localStorage.removeItem('chat-token')
     window.localStorage.removeItem('userId')
     window.location.href = '/';
-    
+
   }
 
   const handleUserClick = async (user) => {
@@ -66,12 +66,12 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
     setReceiverId(user._id)
   }
   const handlefilter = (e) => {
-  const search = e.target.value.toLowerCase();
-  const filtered = users.filter((usr) =>
-    usr.name.toLowerCase().includes(search)
-  );
-  setFilterUsers(filtered);
-};
+    const search = e.target.value.toLowerCase();
+    const filtered = users.filter((usr) =>
+      usr.name.toLowerCase().includes(search)
+    );
+    setFilterUsers(filtered);
+  };
 
 
   return (
@@ -94,18 +94,18 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
               >
                 <img
                   src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${user.image}`}
-                  
+
                   width="40"
                   height="40"
                   className='rounded-full object-cover'
                   alt={user.email}
                 />
                 <div className='flex flex-col'>
-  <span className='text-gray-200'>{user.name}</span>
-  {onlineUsers.includes(user._id) && (
-    <span className='text-green-400 text-sm'>● online</span>
-  )}
-</div>
+                  <span className='text-gray-200'>{user.name}</span>
+                  {onlineUsers.includes(user._id) && (
+                    <span className='text-green-400 text-sm'>● online</span>
+                  )}
+                </div>
 
               </div>
             ))}
@@ -129,4 +129,4 @@ const Sidebar = ({socket, onSelectUser, setReceiverId, setMessages }) => {
 }
 
 export default Sidebar
- 
+
