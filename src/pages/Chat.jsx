@@ -98,14 +98,14 @@ const Chat = ({ socket }) => {
   // Listen for messages
   useEffect(() => {
     const handleNewMessage = (message) => {
-      console.log("newmessages")
+      console.log('Received message:', message);
       if (message.sender === receiverId || message.sender === userId) {
-        setMessages((state) => [...state, { sender: message.sender, content: message.content }]);
+        setMessages((state) => [...state, { _id: message._id, sender: message.sender, content: message.content, seen: message.seen }]);
       }
 
       if (userId !== message.sender && message.sender === receiverId) {
-        console.log("messageseen is workinggg")
-        socket.emit('messageSeen', { messageId: message._id, senderId: userId })
+        console.log("messageseen is workinggg", receiverId, userId, message._id)
+        socket.emit('messageSeen', { messageId: message._id, senderId: receiverId })
       }
     };
 
@@ -118,8 +118,9 @@ const Chat = ({ socket }) => {
 
   useEffect(() => {
     socket.on('messageSeen', ({ messageId }) => {
-      console.log("message seen working")
-      setMessages(prev => prev.map(m => m._id === messageId ? { ...m, seen: true } : m))
+      console.log("message seen working", messageId)
+      setMessages(prev => { const updated = prev.map(m => m._id === messageId ? { ...m, seen: true } : m); console.log("updated", messageId, updated); return updated; });
+
     })
   }, [socket])
 
@@ -136,6 +137,16 @@ const Chat = ({ socket }) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!receiverId) {
+      return;
+    }
+    const unseenMessages = messages.filter(m => m.sender === receiverId && !m.seen)
+    unseenMessages.forEach(m => {
+      socket.emit('messageSeen', { messageId: m._id, senderId: receiverId })
+    })
+  }, [receiverId, messages, socket])
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!message.trim() || !receiverId) return;
@@ -143,11 +154,11 @@ const Chat = ({ socket }) => {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     socket.emit('stopTyping', { senderId: userId, receiverId });
 
-    setMessages(prev => [...prev, { content: message, sender: userId }]);
+
     setMessage('');
 
     try {
-      await axios.post(
+      const res = await axios.post(
         'https://chatapplication-api.onrender.com/chat/message/send/' + receiverId,
         { content: message },
         {
@@ -156,10 +167,13 @@ const Chat = ({ socket }) => {
           }
         }
       );
+      setMessages(prev => [...prev, res.data]);
     } catch (error) {
       console.error('Error sending message:', error);
     }
   };
+
+
 
   const handleTyping = () => {
     if (!socket || !userId || !receiverId) return;
@@ -175,6 +189,15 @@ const Chat = ({ socket }) => {
 
   // ✅ Check if selected user is online
   const isReceiverOnline = selectedUser && onlineUsers.includes(selectedUser._id);
+
+  // console.log(
+  //   "UI rendering messages:",
+  //   messages.map((m) => ({
+  //     id: m._id,
+  //     content: m.content,
+  //     seen: m.seen,
+  //   }))
+  // );
 
   return (
     <div className='min-h-screen flex flex-col md:flex-row bg-gray-900 text-gray-200'>
@@ -251,7 +274,7 @@ const Chat = ({ socket }) => {
                   <p className="break-words whitespace-pre-wrap">{msg.content}</p>
                   {msg.sender === userId && msg.seen && (
                     <span className="text-xs text-gray-300 mt-1 block text-right">
-                      ✓ 
+                      ✓ {msg.seen ? "seen" : "Delivered"}
                     </span>
                   )}
 
