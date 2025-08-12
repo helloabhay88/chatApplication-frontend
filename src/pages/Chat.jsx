@@ -123,7 +123,7 @@ const Chat = ({ socket }) => {
 
   // Scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth',block: 'end' , inline: 'nearest' });
   }, [messages, isTyping]);
 
   useEffect(() => {
@@ -160,7 +160,7 @@ const Chat = ({ socket }) => {
     pending: true
   };
 
-  // Optimistic UI update
+  
   setMessages(prev => [...prev, tempMessage]);
   const currentMessage = message; // save before clearing input
   setMessage('');
