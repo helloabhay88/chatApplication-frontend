@@ -124,7 +124,7 @@ const Chat = ({ socket }) => {
   // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth',block: 'end' , inline: 'nearest' });
-  }, []);
+  }, [messages]);
 
   useEffect(() => {
     return () => {
