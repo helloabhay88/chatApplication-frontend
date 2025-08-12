@@ -167,7 +167,7 @@ const Chat = ({ socket }) => {
 
   try {
     const res = await axios.post(
-      `https://chatapplication-api.onrender.com/message/send/${receiverId}`,
+      `https://chatapplication-api.onrender.com/chat/message/send/${receiverId}`,
       { content: currentMessage },
       {
         headers: {
