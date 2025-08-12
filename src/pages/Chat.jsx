@@ -98,13 +98,11 @@ const Chat = ({ socket }) => {
   // Listen for messages
   useEffect(() => {
     const handleNewMessage = (message) => {
-      console.log('Received message:', message);
       if (message.sender === receiverId || message.sender === userId) {
         setMessages((state) => [...state, { _id: message._id, sender: message.sender, content: message.content, seen: message.seen }]);
       }
 
       if (userId !== message.sender && message.sender === receiverId) {
-        console.log("messageseen is workinggg", receiverId, userId, message._id)
         socket.emit('messageSeen', { messageId: message._id, senderId: receiverId })
       }
     };
@@ -118,8 +116,7 @@ const Chat = ({ socket }) => {
 
   useEffect(() => {
     socket.on('messageSeen', ({ messageId }) => {
-      console.log("message seen working", messageId)
-      setMessages(prev => { const updated = prev.map(m => m._id === messageId ? { ...m, seen: true } : m); console.log("updated", messageId, updated); return updated; });
+      setMessages(prev => prev.map(m => m._id === messageId ? { ...m, seen: true } : m));
 
     })
   }, [socket])
