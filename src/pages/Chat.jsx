@@ -145,30 +145,49 @@ const Chat = ({ socket }) => {
   }, [receiverId, messages, socket])
 
   const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!message.trim() || !receiverId) return;
+  e.preventDefault();
+  if (!message.trim() || !receiverId) return;
 
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    socket.emit('stopTyping', { senderId: userId, receiverId });
+  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  socket.emit('stopTyping', { senderId: userId, receiverId });
 
-
-    setMessage('');
-
-    try {
-      const res = await axios.post(
-        'https://chatapplication-api.onrender.com/chat/message/send/' + receiverId,
-        { content: message },
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
-          }
-        }
-      );
-      setMessages(prev => [...prev, res.data]);
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
+  const tempId = Date.now();
+  const tempMessage = {
+    _id: tempId,
+    sender: userId,
+    content: message,
+    createdAt: new Date(),
+    pending: true
   };
+
+  // Optimistic UI update
+  setMessages(prev => [...prev, tempMessage]);
+  const currentMessage = message; // save before clearing input
+  setMessage('');
+
+  try {
+    const res = await axios.post(
+      `https://chatapplication-api.onrender.com/message/send/${receiverId}`,
+      { content: currentMessage },
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+        }
+      }
+    );
+
+    // Replace temp message with real one
+    setMessages(prev =>
+      prev.map(msg => msg._id === tempId ? res.data : msg)
+    );
+  } catch (error) {
+    console.error('Error sending message:', error);
+    // Mark as failed
+    setMessages(prev =>
+      prev.map(msg => msg._id === tempId ? { ...msg, error: true } : msg)
+    );
+  }
+};
 
 
 
@@ -269,6 +288,7 @@ const Chat = ({ socket }) => {
                     }`}
                 >
                   <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+                   {msg.pending && <span className="text-gray-400 text-sm"> sending...</span>}
                   {msg.sender === userId && msg.seen && (
                     <span className="text-xs text-gray-300 mt-1 block text-right">
                       ✓ {msg.seen ? "seen" : "Delivered"}
