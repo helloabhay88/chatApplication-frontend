@@ -9,6 +9,8 @@ const Home = () => {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [delayMessage, setDelayMessage] = useState('');
+
   useEffect(() => {
     const verifyUser = async () => {
       try {
@@ -33,16 +35,27 @@ const Home = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    let delay;
     try {
       setLoading(true)
+      setDelayMessage('')
+      delay = setTimeout(() => {
+        setDelayMessage('Server is waking up... This may take up to a minute.')
+      }, 3000)
       const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/', { email, password })
+      clearTimeout(delay)
+      setDelayMessage('')
       if (response.data.message === "success") {
         localStorage.setItem('chat-token', response.data.token)
         localStorage.setItem('userId', response.data.user.id)
         navigate("/chat")
       }
     } catch (error) {
+      
       alert(error.response?.data?.message || "Login failed")
+      clearTimeout(delay)
+      setDelayMessage('')
+      
     } finally {
       setLoading(false)
     }
@@ -108,6 +121,10 @@ const Home = () => {
               <span>Login</span>
               {loading && <ClipLoader size={16} color="#fff" />}
             </button>
+
+            {delayMessage && (
+              <p className='mt-2 text-yellow-400 text-sm'>{delayMessage}</p>
+            )}
 
           </form>
 

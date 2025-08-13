@@ -11,9 +11,11 @@ const Register = () => {
   const [name, setName] = useState('')
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [delayMessage, setDelayMessage] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    let delay;
     const formData = new FormData()
     formData.append('email', email)
     formData.append('password', password)
@@ -24,12 +26,20 @@ const Register = () => {
 
     try {
       setLoading(true)
+      setDelayMessage('')
+       delay=setTimeout(()=>{
+        setDelayMessage('Server is waking up... This may take up to a minute.')
+      }, 3000)
       const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/register', formData)
+      clearTimeout(delay)
+      setDelayMessage('')
       if (response.data.message === "success") {
         navigate("/")
       }
     } catch (error) {
       alert(error.response?.data?.message || "Registration failed")
+      clearTimeout(delay)
+      setDelayMessage('')
     }finally{
       setLoading(false)
     }
@@ -106,6 +116,9 @@ const Register = () => {
               <span>Sign Up</span>
               {loading && <ClipLoader size={16} color="#fff" />}
             </button>
+            {delayMessage && (
+              <p className='mt-2 text-yellow-400 text-sm'>{delayMessage}</p>
+            )}
           </form>
 
           <div className='mt-8 grid grid-cols-3 items-center text-orange-400'>
