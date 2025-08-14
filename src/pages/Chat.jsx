@@ -117,7 +117,7 @@ const Chat = ({ socket }) => {
   };
   
   // --- Real-Time Messaging and Status Updates ---
-  // Effect to listen for new incoming messages from the socket.
+  // Effect to listen for new incoming messages and message seen events from the socket.
   // This is the core of the real-time chat functionality.
   useEffect(() => {
     if (!socket || !userId) return;
@@ -132,19 +132,8 @@ const Chat = ({ socket }) => {
         setShouldScrollToBottom(true); // Trigger scroll for new message
       }
     };
-
-    socket.on('newMessage', handleNewMessage);
-
-    return () => {
-      socket.off('newMessage', handleNewMessage);
-    };
-  }, [socket, userId, receiverId]);
-  
-  // Effect to listen for 'messageSeen' events from the server.
-  // This updates the 'seen' status of a sent message in real-time.
-  useEffect(() => {
-    if (!socket) return;
-
+    
+    // This updates the 'seen' status of a sent message in real-time.
     const handleMessageSeen = ({ messageId }) => {
       setMessages(prevMessages =>
         prevMessages.map(msg =>
@@ -153,12 +142,14 @@ const Chat = ({ socket }) => {
       );
     };
 
+    socket.on('newMessage', handleNewMessage);
     socket.on('messageSeen', handleMessageSeen);
 
     return () => {
+      socket.off('newMessage', handleNewMessage);
       socket.off('messageSeen', handleMessageSeen);
     };
-  }, [socket]);
+  }, [socket, userId, receiverId]);
 
   // --- Message Fetching & Pagination Logic ---
 
@@ -175,7 +166,7 @@ const Chat = ({ socket }) => {
     try {
       const skip = currentPage * messagesLimit;
       const res = await axios.get(
-        `${BASE_URL}/chat/message/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
+        `${BASE_URL}/chat/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
