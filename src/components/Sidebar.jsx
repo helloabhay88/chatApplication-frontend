@@ -50,20 +50,11 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
     window.location.href = '/';
   }
 
-  const handleUserClick = async (user) => {
-    try {
-      const response = await axios.get('https://chatapplication-api.onrender.com/chat/message/read/' + user._id, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
-        }
-      })
-      setMessages(response.data)
-    } catch (error) {
-      console.log(error)
-      setMessages([])
-    }
-    onSelectUser(user)
-    setReceiverId(user._id)
+  const handleUserClick = (user) => {
+    // Clear previous messages and set the new receiver
+    setMessages([]);
+    setReceiverId(user._id);
+    onSelectUser(user);
   }
 
   const handlefilter = (e) => {
@@ -130,4 +121,4 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
   )
 }
 
-export default Sidebar
+export default Sidebar;

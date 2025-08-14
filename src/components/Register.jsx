@@ -51,6 +51,7 @@ const Register = () => {
         <div className='md:w-1/2 px-8'>
           <h2 className='font-bold text-2xl text-orange-400'>Sign Up</h2>
           <form className='flex flex-col gap-4 mt-6' onSubmit={handleSubmit}>
+            
             <input
               className='p-2 rounded-xl border border-gray-600 bg-gray-900 text-white placeholder-gray-400'
               onChange={(e) => setEmail(e.target.value)}
