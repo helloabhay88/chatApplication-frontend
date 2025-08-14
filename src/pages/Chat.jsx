@@ -165,7 +165,7 @@ const Chat = ({ socket }) => {
     try {
       const skip = currentPage * messagesLimit;
       const res = await axios.get(
-        `http://localhost:3000/chat/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
+        `https://chatapplication-api.onrender.com/chat/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
@@ -340,7 +340,7 @@ const Chat = ({ socket }) => {
 
     try {
       const res = await axios.post(
-        `http://localhost:3000/chat/message/send/${receiverId}`,
+        `https://chatapplication-api.onrender.com/chat/message/send/${receiverId}`,
         { content: currentMessage },
         {
           headers: {
