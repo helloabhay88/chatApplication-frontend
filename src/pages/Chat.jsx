@@ -165,7 +165,7 @@ const Chat = ({ socket }) => {
     try {
       const skip = currentPage * messagesLimit;
       const res = await axios.get(
-        `https://chatapplication-api.onrender.com/chat/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
+        `https://chatapplication-api.onrender.com/chat/message/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
