@@ -129,6 +129,26 @@ const Chat = ({ socket }) => {
       socket.off('newMessage', handleNewMessage);
     };
   }, [socket, userId, receiverId]);
+  
+  // New Effect to listen for 'messageSeen' events from the server
+  // This updates the 'seen' status of a sent message in real-time
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMessageSeen = ({ messageId }) => {
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
+          msg._id === messageId ? { ...msg, seen: true } : msg
+        )
+      );
+    };
+
+    socket.on('messageSeen', handleMessageSeen);
+
+    return () => {
+      socket.off('messageSeen', handleMessageSeen);
+    };
+  }, [socket]);
 
   // --- Message Fetching & Pagination Logic ---
 
@@ -145,7 +165,7 @@ const Chat = ({ socket }) => {
     try {
       const skip = currentPage * messagesLimit;
       const res = await axios.get(
-        `https://chatapplication-api.onrender.com/chat/message/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
+        `http://localhost:3000/chat/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
@@ -320,7 +340,7 @@ const Chat = ({ socket }) => {
 
     try {
       const res = await axios.post(
-        `https://chatapplication-api.onrender.com/chat/message/send/${receiverId}`,
+        `http://localhost:3000/chat/message/send/${receiverId}`,
         { content: currentMessage },
         {
           headers: {
