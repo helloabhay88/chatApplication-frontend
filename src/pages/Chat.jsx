@@ -18,7 +18,7 @@ const Chat = ({ socket }) => {
   // State for pagination and scrolling
   const [page, setPage] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const messagesLimit = 50; // Define how many messages to fetch at a time
+  const messagesLimit = 20; // Define how many messages to fetch at a time
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const loadingRef = useRef(false);
   const scrollHeightRef = useRef(0);
@@ -37,6 +37,7 @@ const Chat = ({ socket }) => {
 
   // The new base URL for the deployed backend
   const BASE_URL = "https://chatapplication-api.onrender.com";
+  //const BASE_URL = "http://localhost:3000";
 
   // --- Utility Effects ---
   // A heartbeat interval to keep the user's socket connection alive and signal they are active
@@ -72,6 +73,7 @@ const Chat = ({ socket }) => {
   useEffect(() => {
     if (!socket || !userId) return;
     const handleUserTyping = ({ senderId }) => {
+      console.log("User typing event received", senderId, receiverId);
       if (senderId === receiverId) setIsTyping(true);
     };
     const handleUserStopTyping = ({ senderId }) => {
@@ -117,19 +119,15 @@ const Chat = ({ socket }) => {
   };
   
   // --- Real-Time Messaging and Status Updates ---
-  // Effect to listen for new incoming messages and message seen events from the socket.
-  // This is the core of the real-time chat functionality.
+  // The corrected useEffect to handle incoming messages in real-time.
   useEffect(() => {
     if (!socket || !userId) return;
 
+    // CORRECTED LOGIC: Only add a new message if it's from the other person.
     const handleNewMessage = (newMessage) => {
-      // Only add message if it's for the current conversation
-      if (
-        (newMessage.sender === userId && newMessage.receiver === receiverId) ||
-        (newMessage.sender === receiverId && newMessage.receiver === userId)
-      ) {
+      if (newMessage.sender === receiverId) {
         setMessages(prevMessages => [...prevMessages, newMessage]);
-        setShouldScrollToBottom(true); // Trigger scroll for new message
+        setShouldScrollToBottom(true);
       }
     };
     
@@ -475,6 +473,11 @@ const Chat = ({ socket }) => {
 
               {/* Input */}
               <div className='flex-shrink-0 p-3 sm:p-4 border-t border-gray-700 bg-gray-800 shadow-lg'>
+                {isTyping && (
+                  <div className="text-sm text-gray-400 mb-2 transition-opacity duration-300">
+                    <span className="animate-pulse">Typing...</span>
+                  </div>
+                )}
                 <form onSubmit={handleSendMessage}>
                   <div className='flex items-center gap-3 w-full max-w-4xl mx-auto'>
                     <input
