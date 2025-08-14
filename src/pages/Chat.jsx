@@ -35,7 +35,11 @@ const Chat = ({ socket }) => {
   const observer = useRef(null);
   const topMessageRef = useRef(null);
 
+  // The new base URL for the deployed backend
+  const BASE_URL = "https://chatapplication-api.onrender.com";
+
   // --- Utility Effects ---
+  // A heartbeat interval to keep the user's socket connection alive and signal they are active
   useEffect(() => {
     const interval = setInterval(() => {
       if (socket && userId) {
@@ -45,6 +49,7 @@ const Chat = ({ socket }) => {
     return () => clearInterval(interval);
   }, [socket, userId]);
 
+  // Handle browser tab visibility to emit online/offline events
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -63,6 +68,7 @@ const Chat = ({ socket }) => {
     };
   }, [socket, userId]);
 
+  // Set up listeners for typing indicators
   useEffect(() => {
     if (!socket || !userId) return;
     const handleUserTyping = ({ senderId }) => {
@@ -79,16 +85,19 @@ const Chat = ({ socket }) => {
     };
   }, [socket, userId, receiverId]);
 
+  // Reset typing indicator when switching to a new user
   useEffect(() => {
     setIsTyping(false);
   }, [receiverId]);
 
+  // Send a 'join' event to the server when the user connects
   useEffect(() => {
     if (socket && userId) {
       socket.emit('join', userId);
     }
   }, [socket, userId]);
 
+  // Listen for the list of online users from the server
   useEffect(() => {
     if (!socket) return;
     const handleOnlineUsers = (userIds) => {
@@ -101,14 +110,15 @@ const Chat = ({ socket }) => {
   }, [socket]);
   
   // Custom function to scroll to the bottom of the chat container
-  // Changed behavior from 'smooth' to 'instant' to remove the animation on initial load and new messages
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'instant' });
     }
   };
   
-  // Effect to listen for new incoming messages from the socket
+  // --- Real-Time Messaging and Status Updates ---
+  // Effect to listen for new incoming messages from the socket.
+  // This is the core of the real-time chat functionality.
   useEffect(() => {
     if (!socket || !userId) return;
 
@@ -130,8 +140,8 @@ const Chat = ({ socket }) => {
     };
   }, [socket, userId, receiverId]);
   
-  // New Effect to listen for 'messageSeen' events from the server
-  // This updates the 'seen' status of a sent message in real-time
+  // Effect to listen for 'messageSeen' events from the server.
+  // This updates the 'seen' status of a sent message in real-time.
   useEffect(() => {
     if (!socket) return;
 
@@ -165,7 +175,7 @@ const Chat = ({ socket }) => {
     try {
       const skip = currentPage * messagesLimit;
       const res = await axios.get(
-        `https://chatapplication-api.onrender.com/chat/message/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
+        `${BASE_URL}/chat/message/read/${selectedUser._id}?skip=${skip}&limit=${messagesLimit}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
@@ -340,7 +350,7 @@ const Chat = ({ socket }) => {
 
     try {
       const res = await axios.post(
-        `https://chatapplication-api.onrender.com/chat/message/send/${receiverId}`,
+        `${BASE_URL}/chat/message/send/${receiverId}`,
         { content: currentMessage },
         {
           headers: {
