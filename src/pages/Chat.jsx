@@ -24,6 +24,10 @@ const Chat = ({ socket }) => {
   const scrollHeightRef = useRef(0);
   const [isFetchingInitialMessages, setIsFetchingInitialMessages] = useState(false);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+  
+  // A ref to hold the queue of messages to be sent, preventing race conditions
+  const sendingQueueRef = useRef([]);
+  const isSendingRef = useRef(false);
 
   // Refs for DOM elements
   const typingTimeoutRef = useRef(null);
@@ -73,7 +77,7 @@ const Chat = ({ socket }) => {
   useEffect(() => {
     if (!socket || !userId) return;
     const handleUserTyping = ({ senderId }) => {
-      console.log("User typing event received", senderId, receiverId);
+      //console.log("User typing event received", senderId, receiverId);
       if (senderId === receiverId) setIsTyping(true);
     };
     const handleUserStopTyping = ({ senderId }) => {
@@ -125,6 +129,7 @@ const Chat = ({ socket }) => {
 
     // CORRECTED LOGIC: Only add a new message if it's from the other person.
     const handleNewMessage = (newMessage) => {
+      //console.log("New message received:", newMessage);
       if (newMessage.sender === receiverId) {
         setMessages(prevMessages => [...prevMessages, newMessage]);
         setShouldScrollToBottom(true);
@@ -315,6 +320,40 @@ const Chat = ({ socket }) => {
     });
   }, [receiverId, messages, socket]);
 
+  // Function to process the message sending queue
+  const processSendingQueue = async () => {
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
+
+    while (sendingQueueRef.current.length > 0) {
+      const { tempMessage, currentMessage } = sendingQueueRef.current.shift();
+
+      try {
+        const res = await axios.post(
+          `${BASE_URL}/chat/message/send/${receiverId}`,
+          { content: currentMessage },
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+            }
+          }
+        );
+
+        setMessages(prev =>
+          prev.map(msg => msg._id === tempMessage._id ? res.data : msg)
+        );
+
+      } catch (error) {
+        console.error('Error sending message:', error);
+        setMessages(prev =>
+          prev.map(msg => msg._id === tempMessage._id ? { ...msg, error: true } : msg)
+        );
+      }
+    }
+    isSendingRef.current = false;
+  };
+
+
   // Send message handler
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -332,30 +371,16 @@ const Chat = ({ socket }) => {
       pending: true
     };
     
+    // Add the temporary message to the UI
     setMessages(prev => [...prev, tempMessage]);
-    const currentMessage = message;
+    setShouldScrollToBottom(true);
+    
+    // Add the message to the sending queue
+    sendingQueueRef.current.push({ tempMessage, currentMessage: message });
     setMessage('');
-    setShouldScrollToBottom(true); // Trigger scroll for outgoing message
-
-    try {
-      const res = await axios.post(
-        `${BASE_URL}/chat/message/send/${receiverId}`,
-        { content: currentMessage },
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
-          }
-        }
-      );
-      setMessages(prev =>
-        prev.map(msg => msg._id === tempId ? res.data : msg)
-      );
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setMessages(prev =>
-        prev.map(msg => msg._id === tempId ? { ...msg, error: true } : msg)
-      );
-    }
+    
+    // Start processing the queue
+    processSendingQueue();
   };
 
   // Typing handler
