@@ -10,6 +10,7 @@ const Home = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [delayMessage, setDelayMessage] = useState('');
+  const [invalidPassword, setInvalidPassword]=useState(false);
 
   useEffect(() => {
     const verifyUser = async () => {
@@ -53,6 +54,7 @@ const Home = () => {
     } catch (error) {
       
       alert(error.response?.data?.message || "Login failed")
+      setInvalidPassword(true);
       clearTimeout(delay)
       setDelayMessage('')
       
@@ -121,6 +123,7 @@ const Home = () => {
               <span>Login</span>
               {loading && <ClipLoader size={16} color="#fff" />}
             </button>
+            <a href="/forgot-password" className='text-sm text-gray-400 flex items-center justify-center hover:text-gray-300 hover:underline'>Forgot Password?</a>
 
             {delayMessage && (
               <p className='mt-2 text-yellow-400 text-sm'>{delayMessage}</p>
