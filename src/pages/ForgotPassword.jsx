@@ -62,7 +62,7 @@ const ForgotPassword = () => {
               <span>Send Link</span>
               {loading && <ClipLoader size={16} color="#fff" />}
             </button>
-           {linkmessage && <p className='text-green-400'>If the email exists in our system, a password reset link has been sent. This link is valid for 5 minutes.</p>}
+           {linkmessage && <p className='text-green-400'>If the email exists in our system, a password reset link has been sent. This link is valid for 10 minutes. Please check your inbox and spam folder.</p>}
             {delayMessage && (
               <p className='mt-2 text-yellow-400 text-sm'>{delayMessage}</p>
             )}
