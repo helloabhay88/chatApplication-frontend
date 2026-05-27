@@ -1,6 +1,7 @@
 import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { IoSettingsOutline } from "react-icons/io5";
 
 const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
   const [users, setUsers] = useState([])
@@ -25,7 +26,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const users = await axios.get('https://chatapplication-api.onrender.com/chat/users', {
+        const users = await axios.get('http://localhost:3000/chat/users', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
           }
@@ -68,19 +69,21 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
   return (
     <div className='flex flex-col h-screen max-h-screen p-4 bg-gray-800 text-gray-200'>
       {/* Search Input - Fixed at top */}
-      <div className='flex-shrink-0 mb-4'>
+      <div className='flex items-center gap-2 mb-4'>
         <input
           type="text"
           placeholder='Search'
           onChange={handlefilter}
           className='p-2 w-full rounded-xl border border-gray-600 bg-gray-700 text-white placeholder-gray-400'
         />
+        <IoSettingsOutline className='text-gray-400 cursor-pointer hover:text-white' size={22}/>
       </div>
 
       {/* User List - Scrollable middle section */}
       <div className='flex-1 min-h-0 overflow-y-auto mb-4'>
         {filterUsers.length > 0 ? (
           <div className='space-y-4'>
+  
             {filterUsers.map(user => (
               <div
                 key={user._id}
@@ -107,7 +110,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
           <p className='text-gray-400'>No users</p>
         )}
       </div>
-
+        
       {/* Logout Button - Fixed at bottom */}
       <div className='flex-shrink-0'>
         <button
@@ -118,6 +121,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
         </button>
       </div>
     </div>
+    
   )
 }
 

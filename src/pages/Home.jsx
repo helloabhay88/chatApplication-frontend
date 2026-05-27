@@ -43,7 +43,7 @@ const Home = () => {
       delay = setTimeout(() => {
         setDelayMessage('Server is waking up... This may take up to a minute.')
       }, 3000)
-      const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/', { email, password })
+      const response = await axios.post('http://localhost:3000/chat/user/', { email, password })
       clearTimeout(delay)
       setDelayMessage('')
       if (response.data.message === "success") {

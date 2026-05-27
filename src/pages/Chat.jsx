@@ -25,9 +25,7 @@ const Chat = ({ socket }) => {
   const [isFetchingInitialMessages, setIsFetchingInitialMessages] = useState(false);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   
-  // A ref to hold the queue of messages to be sent, preventing race conditions
-  const sendingQueueRef = useRef([]);
-  const isSendingRef = useRef(false);
+
 
   // Refs for DOM elements
   const typingTimeoutRef = useRef(null);
@@ -40,8 +38,8 @@ const Chat = ({ socket }) => {
   const topMessageRef = useRef(null);
 
   // The new base URL for the deployed backend
-  const BASE_URL = "https://chatapplication-api.onrender.com";
-  //const BASE_URL = "http://localhost:3000";
+  //const BASE_URL = "https://chatapplication-api.onrender.com";
+  const BASE_URL = "http://localhost:3000";
 
   // --- Utility Effects ---
   // A heartbeat interval to keep the user's socket connection alive and signal they are active
@@ -315,58 +313,37 @@ const Chat = ({ socket }) => {
   useEffect(() => {
     if (!receiverId) return;
     const unseenMessages = messages.filter(m => m.sender === receiverId && !m.seen);
-    unseenMessages.forEach(m => {
-      socket.emit('messageSeen', { messageId: m._id, senderId: receiverId });
-    });
+    
+    if (unseenMessages.length > 0) {
+      unseenMessages.forEach(m => {
+        socket.emit('messageSeen', { messageId: m._id, senderId: receiverId });
+      });
+      
+      setMessages(prevMessages => 
+        prevMessages.map(m => 
+          m.sender === receiverId && !m.seen ? { ...m, seen: true } : m
+        )
+      );
+    }
   }, [receiverId, messages, socket]);
 
-  // Function to process the message sending queue
-  const processSendingQueue = async () => {
-    if (isSendingRef.current) return;
-    isSendingRef.current = true;
-
-    while (sendingQueueRef.current.length > 0) {
-      const { tempMessage, currentMessage } = sendingQueueRef.current.shift();
-
-      try {
-        const res = await axios.post(
-          `${BASE_URL}/chat/message/send/${receiverId}`,
-          { content: currentMessage },
-          {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
-            }
-          }
-        );
-
-        setMessages(prev =>
-          prev.map(msg => msg._id === tempMessage._id ? res.data : msg)
-        );
-
-      } catch (error) {
-        console.error('Error sending message:', error);
-        setMessages(prev =>
-          prev.map(msg => msg._id === tempMessage._id ? { ...msg, error: true } : msg)
-        );
-      }
-    }
-    isSendingRef.current = false;
-  };
-
-
   // Send message handler
-  const handleSendMessage = async (e) => {
+  const handleSendMessage = (e) => {
     e.preventDefault();
     if (!message.trim() || !receiverId) return;
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     socket.emit('stopTyping', { senderId: userId, receiverId });
 
+    // Capture data and clear input immediately
     const tempId = Date.now();
+    const messageContent = message;
+    setMessage('');
+    
     const tempMessage = {
       _id: tempId,
       sender: userId,
-      content: message,
+      content: messageContent,
       createdAt: new Date(),
       pending: true
     };
@@ -375,12 +352,27 @@ const Chat = ({ socket }) => {
     setMessages(prev => [...prev, tempMessage]);
     setShouldScrollToBottom(true);
     
-    // Add the message to the sending queue
-    sendingQueueRef.current.push({ tempMessage, currentMessage: message });
-    setMessage('');
-    
-    // Start processing the queue
-    processSendingQueue();
+    // Fire the API request in the background concurrently
+    axios.post(
+      `${BASE_URL}/chat/message/send/${receiverId}`,
+      { content: messageContent },
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+        }
+      }
+    )
+    .then((res) => {
+      setMessages(prev =>
+        prev.map(msg => msg._id === tempId ? res.data : msg)
+      );
+    })
+    .catch((error) => {
+      console.error('Error sending message:', error);
+      setMessages(prev =>
+        prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true } : msg)
+      );
+    });
   };
 
   // Typing handler
