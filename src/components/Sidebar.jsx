@@ -26,7 +26,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages }) => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const users = await axios.get('http://localhost:3000/chat/users', {
+        const users = await axios.get('https://chatapplication-api.onrender.com/chat/users', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
           }

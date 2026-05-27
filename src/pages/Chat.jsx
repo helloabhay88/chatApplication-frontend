@@ -38,8 +38,8 @@ const Chat = ({ socket }) => {
   const topMessageRef = useRef(null);
 
   // The new base URL for the deployed backend
-  //const BASE_URL = "https://chatapplication-api.onrender.com";
-  const BASE_URL = "http://localhost:3000";
+  const BASE_URL = "https://chatapplication-api.onrender.com";
+  //const BASE_URL = "http://localhost:3000";
 
   // --- Utility Effects ---
   // A heartbeat interval to keep the user's socket connection alive and signal they are active

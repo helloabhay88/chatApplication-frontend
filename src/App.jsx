@@ -7,8 +7,8 @@ import io from 'socket.io-client'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
-//const socket=io.connect('https://chatapplication-api.onrender.com/')
-const socket=io.connect('http://localhost:3000/')
+const socket=io.connect('https://chatapplication-api.onrender.com/')
+//const socket=io.connect('http://localhost:3000/')
 function App() {
 
   return (
