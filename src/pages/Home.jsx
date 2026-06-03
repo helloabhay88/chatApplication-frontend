@@ -49,6 +49,7 @@ const Home = () => {
       if (response.data.message === "success") {
         localStorage.setItem('chat-token', response.data.token)
         localStorage.setItem('userId', response.data.user.id)
+        localStorage.setItem('userName', response.data.user.name)
         navigate("/chat")
       }
     } catch (error) {

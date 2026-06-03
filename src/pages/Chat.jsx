@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import axios from 'axios';
-import { FiMenu } from 'react-icons/fi';
+import { FiMenu, FiVideo, FiPhoneOff } from 'react-icons/fi';
 import { SyncLoader } from 'react-spinners';
 
 const Chat = ({ socket }) => {
@@ -25,7 +25,27 @@ const Chat = ({ socket }) => {
   const [isFetchingInitialMessages, setIsFetchingInitialMessages] = useState(false);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   
+  // WebRTC State
+  const [stream, setStream] = useState();
+  const [receivingCall, setReceivingCall] = useState(false);
+  const [caller, setCaller] = useState("");
+  const [callerName, setCallerName] = useState("");
+  const [callerSignal, setCallerSignal] = useState();
+  const [callAccepted, setCallAccepted] = useState(false);
+  const [callEnded, setCallEnded] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
 
+  const myVideo = useRef();
+  const userVideo = useRef();
+  const connectionRef = useRef();
+  const streamRef = useRef(null); // Add ref to hold stream to avoid stale closures
+
+  // Attach local stream when it becomes available and the video element renders
+  useEffect(() => {
+    if (myVideo.current && stream) {
+      myVideo.current.srcObject = stream;
+    }
+  }, [stream, isCalling, callAccepted]);
 
   // Refs for DOM elements
   const typingTimeoutRef = useRef(null);
@@ -112,7 +132,50 @@ const Chat = ({ socket }) => {
       socket.off('onlineUsers', handleOnlineUsers);
     };
   }, [socket]);
-  
+
+  // WebRTC Incoming Call Listener
+  useEffect(() => {
+    if (!socket) return;
+    
+    socket.on("callUser", (data) => {
+      console.log("--> [Socket] Received 'callUser' event:", data);
+      setReceivingCall(true);
+      setCaller(data.from);
+      setCallerName(data.name);
+      setCallerSignal(data.signal);
+    });
+
+    socket.on("callAccepted", async (signal) => {
+      console.log("--> [Socket] Received 'callAccepted'. Setting remote description.");
+      setCallAccepted(true);
+      if (connectionRef.current) {
+        await connectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+      }
+    });
+
+    socket.on("ice-candidate", async (candidate) => {
+      if (connectionRef.current) {
+        try {
+          await connectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("--> [WebRTC] Error adding received ICE candidate", e);
+        }
+      }
+    });
+
+    socket.on("callEnded", () => {
+      console.log("--> [Socket] Received 'callEnded' event");
+      endCall(false);
+    });
+
+    return () => {
+      socket.off("callUser");
+      socket.off("callAccepted");
+      socket.off("ice-candidate");
+      socket.off("callEnded");
+    };
+  }, [socket]);
+
   // Custom function to scroll to the bottom of the chat container
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -375,6 +438,122 @@ const Chat = ({ socket }) => {
     });
   };
 
+  // --- WebRTC Native Functions ---
+  const iceServers = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' }
+    ]
+  };
+
+  const createPeerConnection = (isInitiator, currentStream) => {
+    const pc = new RTCPeerConnection(iceServers);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("ice-candidate", {
+          target: isInitiator ? receiverId : caller,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      if (userVideo.current) {
+        userVideo.current.srcObject = event.streams[0];
+      }
+    };
+
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => pc.addTrack(track, currentStream));
+    }
+
+    return pc;
+  };
+
+  const startVideoCall = async () => {
+    console.log("--> [WebRTC] startVideoCall initiated. Requesting media devices...");
+    try {
+      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      console.log("--> [WebRTC] Media stream obtained.");
+      setStream(currentStream);
+      streamRef.current = currentStream;
+      setIsCalling(true);
+      setCallEnded(false);
+      
+      const pc = createPeerConnection(true, currentStream);
+      connectionRef.current = pc;
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      console.log("--> [WebRTC] Emitting 'callUser' socket event to", receiverId);
+      socket.emit("callUser", {
+        userToCall: receiverId,
+        signalData: offer,
+        from: userId,
+        name: window.localStorage.getItem('userName') || "User"
+      });
+    } catch (err) {
+      console.error("--> [WebRTC] Error accessing media devices:", err);
+      alert("Could not access camera/microphone. Please check permissions.");
+    }
+  };
+
+  const answerCall = async () => {
+    setCallAccepted(true);
+    setCallEnded(false);
+    
+    try {
+      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setStream(currentStream);
+      streamRef.current = currentStream;
+
+      const pc = createPeerConnection(false, currentStream);
+      connectionRef.current = pc;
+
+      await pc.setRemoteDescription(new RTCSessionDescription(callerSignal));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit("answerCall", { signal: answer, to: caller });
+    } catch (err) {
+      console.error("--> [WebRTC] Error accessing media devices:", err);
+    }
+  };
+
+  const endCall = (emit = true) => {
+    setCallEnded(true);
+    setIsCalling(false);
+    setCallAccepted(false);
+    setReceivingCall(false);
+    
+    if (connectionRef.current) {
+      connectionRef.current.close();
+      connectionRef.current = null;
+    }
+    
+    // Use streamRef to avoid stale closure issues from the socket listener
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    // Also stop state stream just in case
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    
+    if (myVideo.current) myVideo.current.srcObject = null;
+    if (userVideo.current) userVideo.current.srcObject = null;
+    
+    setStream(null);
+    
+    if (emit) {
+        socket.emit("endCall", { to: isCalling ? receiverId : caller });
+    }
+  };
+
   // Typing handler
   const handleTyping = () => {
     if (!socket || !userId || !receiverId) return;
@@ -443,14 +622,21 @@ const Chat = ({ socket }) => {
           ) : (
             <>
               {/* Desktop Header */}
-              <div className='hidden md:block p-4 border-b border-gray-700 bg-gray-800 rounded-b-lg shadow-md'>
+              <div className='hidden md:flex p-4 border-b border-gray-700 bg-gray-800 rounded-b-lg shadow-md justify-between items-center'>
                 <h2 className='text-lg sm:text-xl font-semibold'>
                   Chat with {selectedUser.name}
                   <span className={`ml-2 text-sm ${isReceiverOnline ? 'text-green-400' : 'text-gray-400'}`}>
                     ● {isReceiverOnline ? 'online' : 'offline'}
                   </span>
                 </h2>
+                {isReceiverOnline && (
+                  <button onClick={startVideoCall} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                    <FiVideo size={20} />
+                  </button>
+                )}
               </div>
+
+
 
               {/* Messages */}
               <div
@@ -525,6 +711,55 @@ const Chat = ({ socket }) => {
           </div>
         )}
       </div>
+
+      {/* --- MOVED WEBRTC OVERLAYS --- */}
+      {/* Incoming Call UI */}
+      {receivingCall && !callAccepted && (
+        <div className="absolute top-20 right-4 z-[60] bg-gray-800 p-5 rounded-xl shadow-2xl border border-gray-600 flex flex-col items-center transform transition-all">
+          <h3 className="text-white font-semibold mb-4 text-lg">{callerName || 'Someone'} is calling...</h3>
+          <div className="flex gap-4">
+            <button onClick={answerCall} className="bg-green-500 hover:bg-green-600 px-6 py-2 rounded-lg text-white font-medium shadow">Answer</button>
+            <button onClick={() => endCall(true)} className="bg-red-500 hover:bg-red-600 px-6 py-2 rounded-lg text-white font-medium shadow">Decline</button>
+          </div>
+        </div>
+      )}
+
+      {/* Active Call Overlay */}
+      {(isCalling || callAccepted) && !callEnded && (
+        <div className="absolute inset-0 z-[60] bg-gray-900 flex flex-col p-4">
+          <div className="flex-1 flex flex-col md:flex-row gap-4 relative">
+            {/* Remote Video */}
+            {callAccepted ? (
+              <div className="flex-1 bg-black rounded-lg overflow-hidden flex items-center justify-center border border-gray-700 shadow-inner">
+                <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              isCalling && (
+                <div className="flex-1 bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center border border-gray-700 shadow-inner">
+                  <SyncLoader color="#3B82F6" />
+                  <p className="mt-6 text-gray-400 text-lg animate-pulse">Ringing {selectedUser?.name || 'User'}...</p>
+                </div>
+              )
+            )}
+      
+            {/* Local Video (PiP) */}
+            {stream && (
+              <div className="absolute bottom-4 right-4 w-32 md:w-48 h-48 md:h-64 bg-black rounded-lg overflow-hidden shadow-2xl border-2 border-gray-600">
+                <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {/* Floating End Call Button */}
+            <button
+              onClick={() => endCall(true)}
+              className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white p-4 sm:p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)] transition-all hover:scale-110 hover:shadow-[0_0_25px_rgba(220,38,38,0.9)] flex items-center justify-center z-50 group"
+              title="End Call"
+            >
+              <FiPhoneOff size={28} className="group-hover:animate-pulse" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
