@@ -584,7 +584,13 @@ const Chat = ({ socket }) => {
             </>
           ) : 'Chat'}
         </h2>
-        <div className="w-8" />
+        <div className="flex items-center justify-end min-w-[2rem]">
+          {selectedUser && isReceiverOnline && (
+            <button onClick={startVideoCall} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+              <FiVideo size={18} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sidebar */}
@@ -731,7 +737,7 @@ const Chat = ({ socket }) => {
             {/* Remote Video */}
             {callAccepted ? (
               <div className="flex-1 bg-black rounded-lg overflow-hidden flex items-center justify-center border border-gray-700 shadow-inner">
-                <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
+                <video playsInline ref={userVideo} autoPlay className="w-full h-full object-contain" />
               </div>
             ) : (
               isCalling && (
@@ -745,7 +751,7 @@ const Chat = ({ socket }) => {
             {/* Local Video (PiP) */}
             {stream && (
               <div className="absolute bottom-4 right-4 w-32 md:w-48 h-48 md:h-64 bg-black rounded-lg overflow-hidden shadow-2xl border-2 border-gray-600">
-                <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-cover" />
+                <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-contain" />
               </div>
             )}
 
