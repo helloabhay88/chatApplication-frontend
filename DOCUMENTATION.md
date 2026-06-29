@@ -204,6 +204,8 @@ Protected endpoints require a Bearer token in the `Authorization` header.
 ### Message Logs
 *   `GET /chat/message/read/:receiverId`: Retrieves the paginated message logs exchanged between the caller and target contact.
 *   `POST /chat/message/send/:receiverId`: Persists and broadcasts a new text message payload.
+*   `POST /chat/message/upload`: Uploads a file/image attachment to Cloudinary, returning the secure file ID, original name, and mimetype classification.
+*   `DELETE /chat/message/delete/:messageId`: Deletes a sent message. Cleans up any associated Cloudinary asset, removes the document from MongoDB, and dispatches a socket notice to the recipient.
 
 ---
 
@@ -216,6 +218,7 @@ The server uses Socket.io to manage live message delivery, online visibility sta
 *   `registerOnline`: Maps socket connection to user ID and broadcasts `onlineUsers` lists.
 *   `sendMessage` / `newMessage`: Emits live text payloads between active client sockets.
 *   `typing` / `stopTyping`: Indicates active typing indicators on the receiver's UI.
+*   `messageDeleted`: Notifies the recipient in real-time to remove the deleted message from their view.
 
 ### WebRTC Connection Events
 *   `callUser`: Distributes candidate media parameters and caller metadata.

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import SettingsModal from '../components/SettingsModal';
 import axios from 'axios';
-import { FiMenu, FiVideo, FiPhoneOff, FiMic, FiMicOff, FiVideoOff, FiPhone } from 'react-icons/fi';
+import { FiMenu, FiVideo, FiPhoneOff, FiMic, FiMicOff, FiVideoOff, FiPhone, FiPaperclip, FiTrash2, FiFile, FiDownload, FiShare2 } from 'react-icons/fi';
 import { SyncLoader } from 'react-spinners';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -77,6 +77,13 @@ const Chat = ({ socket }) => {
   const userVideo = useRef();
   const connectionRef = useRef();
   const streamRef = useRef(null); // Add ref to hold stream to avoid stale closures
+
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const screenStreamRef = useRef(null);
 
   // Attach local stream when it becomes available and the video element renders
   useEffect(() => {
@@ -241,12 +248,18 @@ const Chat = ({ socket }) => {
       );
     };
 
+    const handleMessageDeleted = ({ messageId }) => {
+      setMessages(prevMessages => prevMessages.filter(msg => msg._id !== messageId));
+    };
+
     socket.on('newMessage', handleNewMessage);
     socket.on('messagesSeenBulk', handleMessagesSeenBulk);
+    socket.on('messageDeleted', handleMessageDeleted);
 
     return () => {
       socket.off('newMessage', handleNewMessage);
       socket.off('messagesSeenBulk', handleMessagesSeenBulk);
+      socket.off('messageDeleted', handleMessageDeleted);
     };
   }, [socket, userId, receiverId]);
 
@@ -423,10 +436,23 @@ const Chat = ({ socket }) => {
     }
   }, [receiverId, messages, socket]);
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File size exceeds the 5MB limit.");
+        return;
+      }
+      setSelectedFile(file);
+      setFilePreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : 'file_placeholder');
+    }
+  };
+
   // Send message handler
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!message.trim() || !receiverId) return;
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
+    if (!message.trim() && !selectedFile) return;
+    if (!receiverId) return;
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     socket.emit('stopTyping', { senderId: userId, receiverId });
@@ -436,31 +462,155 @@ const Chat = ({ socket }) => {
     const messageContent = message;
     setMessage('');
     
-    const tempMessage = {
-      _id: tempId,
-      sender: userId,
-      content: messageContent,
-      createdAt: new Date(),
-      pending: true
-    };
-    
-    // Add the temporary message to the UI
-    setMessages(prev => [...prev, tempMessage]);
-    setShouldScrollToBottom(true);
-    
-    // Fire the socket event for sending the message
-    socket.emit('sendMessage', { senderId: userId, receiverId, content: messageContent }, (response) => {
-      if (response && response.success) {
-        setMessages(prev =>
-          prev.map(msg => msg._id === tempId ? response.message : msg)
-        );
-      } else {
-        console.error('Error sending message via socket:', response?.error);
-        setMessages(prev =>
-          prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true } : msg)
-        );
+    if (selectedFile) {
+      setIsUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const response = await axios.post(`${BASE_URL}/chat/message/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+          }
+        });
+
+        const { url, name, type } = response.data;
+
+        const payload = {
+          senderId: userId,
+          receiverId,
+          messageType: type,
+          fileUrl: url,
+          fileName: name,
+        };
+        if (messageContent) {
+          payload.content = messageContent;
+        }
+
+        setSelectedFile(null);
+        setFilePreview(null);
+        setIsUploading(false);
+
+        socket.emit('sendMessage', payload, (res) => {
+          if (res && res.success) {
+            setMessages(prev => [...prev, res.message]);
+            setShouldScrollToBottom(true);
+          } else {
+            console.error('Error sending file message via socket:', res?.error);
+          }
+        });
+      } catch (err) {
+        console.error("Error uploading file:", err);
+        alert("Failed to upload file.");
+        setIsUploading(false);
       }
-    });
+    } else {
+      const tempMessage = {
+        _id: tempId,
+        sender: userId,
+        content: messageContent,
+        messageType: 'text',
+        createdAt: new Date(),
+        pending: true
+      };
+      
+      // Add the temporary message to the UI
+      setMessages(prev => [...prev, tempMessage]);
+      setShouldScrollToBottom(true);
+      
+      // Fire the socket event for sending the message
+      socket.emit('sendMessage', { senderId: userId, receiverId, content: messageContent, messageType: 'text' }, (response) => {
+        if (response && response.success) {
+          setMessages(prev =>
+            prev.map(msg => msg._id === tempId ? response.message : msg)
+          );
+        } else {
+          console.error('Error sending message via socket:', response?.error);
+          setMessages(prev =>
+            prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true } : msg)
+          );
+        }
+      });
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!window.confirm("Are you sure you want to delete this message?")) {
+      return;
+    }
+    try {
+      // Filter out immediately for responsiveness
+      setMessages(prev => prev.filter(msg => msg._id !== messageId));
+
+      await axios.delete(`${BASE_URL}/chat/message/delete/${messageId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+        }
+      });
+    } catch (err) {
+      console.error("Error deleting message:", err);
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      await stopScreenShare();
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        screenStreamRef.current = screenStream;
+        setIsScreenSharing(true);
+
+        const screenTrack = screenStream.getVideoTracks()[0];
+
+        if (connectionRef.current) {
+          const senders = connectionRef.current.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(screenTrack);
+          }
+        }
+
+        screenTrack.onended = () => {
+          stopScreenShare();
+        };
+
+        const audioTracks = stream ? stream.getAudioTracks() : [];
+        const combinedStream = new MediaStream([screenTrack, ...audioTracks]);
+        setStream(combinedStream);
+        streamRef.current = combinedStream;
+
+      } catch (err) {
+        console.error("Error starting screen share:", err);
+      }
+    }
+  };
+
+  const stopScreenShare = async () => {
+    try {
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+      }
+      setIsScreenSharing(false);
+
+      const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const cameraTrack = cameraStream.getVideoTracks()[0];
+
+      if (connectionRef.current) {
+        const senders = connectionRef.current.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(cameraTrack);
+        }
+      }
+
+      setStream(cameraStream);
+      streamRef.current = cameraStream;
+    } catch (err) {
+      console.error("Error stopping screen share and reverting to camera:", err);
+    }
   };
 
   // --- WebRTC Native Functions ---
@@ -576,6 +726,12 @@ const Chat = ({ socket }) => {
     setReceivingCall(false);
     setIsMuted(false);
     setIsVideoOff(false);
+    setIsScreenSharing(false);
+
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
+    }
     
     if (connectionRef.current) {
       connectionRef.current.close();
@@ -636,10 +792,18 @@ const Chat = ({ socket }) => {
         <div className="flex items-center justify-end min-w-[2rem] gap-2">
           {selectedUser && isReceiverOnline && (
             <>
-              <button onClick={() => startCall('audio')} className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+              <button 
+                onClick={() => startCall('audio')} 
+                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700 transition duration-150"
+                title="Start Audio Call"
+              >
                 <FiPhone size={18} />
               </button>
-              <button onClick={() => startCall('video')} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+              <button 
+                onClick={() => startCall('video')} 
+                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700 transition duration-150"
+                title="Start Video Call"
+              >
                 <FiVideo size={18} />
               </button>
             </>
@@ -695,10 +859,18 @@ const Chat = ({ socket }) => {
                 <div className="flex gap-2">
                   {isReceiverOnline && (
                     <>
-                      <button onClick={() => startCall('audio')} className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                      <button 
+                        onClick={() => startCall('audio')} 
+                        className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700 transition duration-150"
+                        title="Start Audio Call"
+                      >
                         <FiPhone size={20} />
                       </button>
-                      <button onClick={() => startCall('video')} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                      <button 
+                        onClick={() => startCall('video')} 
+                        className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700 transition duration-150"
+                        title="Start Video Call"
+                      >
                         <FiVideo size={20} />
                       </button>
                     </>
@@ -721,13 +893,55 @@ const Chat = ({ socket }) => {
                 {messages.map((msg, index) => (
                   <div
                     key={msg._id}
-                    className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md
+                    className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md relative group flex flex-col
                       ${msg.sender === userId
                         ? 'bg-blue-600 self-end text-white'
                         : 'bg-gray-700 self-start text-white'
                       }`}
                   >
-                    <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+                    {msg.messageType === 'image' ? (
+                      <div className="space-y-2">
+                        <img
+                          src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
+                          alt={msg.fileName || "Image"}
+                          className="max-w-full rounded cursor-pointer hover:opacity-90 max-h-60 object-contain"
+                          onClick={() => setLightboxImage(`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`)}
+                        />
+                        {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
+                      </div>
+                    ) : msg.messageType === 'file' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 bg-gray-800/50 p-3 rounded-lg border border-gray-700 max-w-sm">
+                          <FiFile className="text-blue-400 flex-shrink-0" size={24} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate text-gray-200">{msg.fileName}</p>
+                            <a
+                              href={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1 font-semibold"
+                            >
+                              <FiDownload size={12} className="inline mr-1" /> Download
+                            </a>
+                          </div>
+                        </div>
+                        {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
+                      </div>
+                    ) : (
+                      <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+                    )}
+
+                    {msg.sender === userId && (
+                      <button
+                        onClick={() => handleDeleteMessage(msg._id)}
+                        className="absolute top-1/2 -translate-y-1/2 -left-8 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-red-400 hover:text-red-300 p-1.5 rounded-full hover:bg-gray-800/50 transition-opacity duration-200 flex items-center justify-center"
+                        title="Delete Message"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    )}
+
                     {msg.pending && <span className="text-gray-400 text-sm"> sending...</span>}
                     {msg.sender === userId && msg.seen && (
                       <span className="text-xs text-gray-300 mt-1 block text-right">
@@ -745,30 +959,76 @@ const Chat = ({ socket }) => {
               </div>
 
               {/* Input */}
-              <div className='flex-shrink-0 p-3 sm:p-4 border-t border-gray-700 bg-gray-800 shadow-lg'>
-                {isTyping && (
-                  <div className="text-sm text-gray-400 mb-2 transition-opacity duration-300">
-                    <span className="animate-pulse">Typing...</span>
-                  </div>
-                )}
-                <form onSubmit={handleSendMessage}>
-                  <div className='flex items-center gap-3 w-full max-w-4xl mx-auto'>
+              <div className='flex-shrink-0 p-3 sm:p-4 border-t border-gray-700 bg-gray-800 shadow-lg flex flex-col justify-center'>
+                <div className='w-full max-w-4xl mx-auto flex flex-col justify-center'>
+                  {isTyping && (
+                    <div className="text-sm text-gray-400 mb-2 transition-opacity duration-300 self-start">
+                      <span className="animate-pulse">Typing...</span>
+                    </div>
+                  )}
+                  {filePreview && (
+                    <div className="flex items-center gap-3 mb-2 bg-gray-700 p-2 rounded-lg max-w-xs relative self-start">
+                      {filePreview === 'file_placeholder' ? (
+                        <div className="w-12 h-12 bg-gray-600 flex items-center justify-center rounded">
+                          <FiFile size={24} className="text-gray-300" />
+                        </div>
+                      ) : (
+                        <img src={filePreview} alt="Preview" className="w-12 h-12 object-cover rounded" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-200 truncate">{selectedFile?.name}</p>
+                        <p className="text-[10px] text-gray-400">{(selectedFile?.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setFilePreview(null);
+                        }}
+                        className="text-red-400 hover:text-red-500 font-bold px-2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                  {isUploading && (
+                    <div className="text-sm text-blue-400 mb-2 animate-pulse self-start">
+                      Uploading file...
+                    </div>
+                  )}
+                  <form 
+                    onSubmit={handleSendMessage}
+                    className='flex items-center gap-3 w-full'
+                  >
+                    <label
+                      htmlFor="file-upload"
+                      className='cursor-pointer text-gray-400 hover:text-white rounded-full hover:bg-gray-700 flex items-center justify-center flex-shrink-0 w-12 h-12 transition-colors'
+                      title="Attach file or image"
+                    >
+                      <FiPaperclip size={20} />
+                    </label>
+                    <input
+                      id="file-upload"
+                      type='file'
+                      className='hidden'
+                      onChange={handleFileSelect}
+                    />
                     <input
                       type='text'
                       value={message}
                       onChange={(e) => { setMessage(e.target.value); handleTyping(); }}
                       placeholder='Type your message...'
-                      className='flex-1 p-3 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                      className='flex-1 px-4 h-12 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                     />
                     <button
                       type='submit'
-                      disabled={!message.trim()}
-                      className='bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white px-6 py-3 rounded-full'
+                      disabled={!message.trim() && !selectedFile}
+                      className='bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white px-6 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-colors'
                     >
                       Send
                     </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             </>
           )
@@ -852,10 +1112,37 @@ const Chat = ({ socket }) => {
               >
                 {isVideoOff ? <FiVideoOff size={22} /> : <FiVideo size={22} />}
               </button>
+
+              {callAccepted && callType === 'video' && (
+                <button
+                  onClick={toggleScreenShare}
+                  className={`p-3 md:p-4 rounded-full shadow-lg transition-all hover:scale-110 flex items-center justify-center ${isScreenSharing ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(22,163,74,0.5)]' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                  title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
+                >
+                  <FiShare2 size={22} />
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black bg-opacity-95 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div className="relative max-w-5xl max-h-screen" onClick={(e) => e.stopPropagation()}>
+            <img src={lightboxImage} alt="Expanded view" className="max-w-full max-h-[90vh] object-contain rounded" />
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-4 right-4 text-white bg-gray-800 hover:bg-gray-700 p-2 rounded-full font-bold text-xl transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Settings Modal */}
       <SettingsModal 
         isOpen={isSettingsOpen} 

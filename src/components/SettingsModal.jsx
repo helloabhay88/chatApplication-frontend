@@ -56,36 +56,100 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setShouldDeletePhoto(false);
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Profile picture size exceeds 2MB limit.");
+        return;
+      }
+      setLoading(true);
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await axios.put(
+          `${import.meta.env.VITE_API_URL}/chat/user/profile`,
+          formData,
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('chat-token')}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+
+        if (response.data.message === 'success') {
+          const updatedUser = response.data.user;
+          setPreviewUrl(`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${updatedUser.image}`);
+          setSelectedFile(null);
+          setShouldDeletePhoto(false);
+          if (onProfileUpdate) {
+            onProfileUpdate(updatedUser);
+          }
+        }
+      } catch (err) {
+        console.error('Error uploading profile picture:', err);
+        alert(err.response?.data?.message || 'Failed to upload profile picture');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleDeletePhoto = (e) => {
+  const handleDeletePhoto = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (window.confirm("Are you sure you want to delete your profile picture?")) {
-      setSelectedFile(null);
-      setPreviewUrl('');
-      setShouldDeletePhoto(true);
+      setLoading(true);
+      try {
+        const formData = new FormData();
+        formData.append('removeImage', 'true');
+
+        const response = await axios.put(
+          `${import.meta.env.VITE_API_URL}/chat/user/profile`,
+          formData,
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('chat-token')}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+
+        if (response.data.message === 'success') {
+          const updatedUser = response.data.user;
+          setPreviewUrl('');
+          setSelectedFile(null);
+          setShouldDeletePhoto(false);
+          if (onProfileUpdate) {
+            onProfileUpdate(updatedUser);
+          }
+        }
+      } catch (err) {
+        console.error('Error removing profile picture:', err);
+        alert(err.response?.data?.message || 'Failed to remove profile picture');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (!name.trim()) {
+      alert("Name is required");
+      return;
+    }
+    // If name is unchanged, just close
+    if (name.trim() === (currentUser?.name || '').trim()) {
+      onClose();
+      return;
+    }
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('name', name);
-      if (selectedFile) {
-        formData.append('image', selectedFile);
-      } else if (shouldDeletePhoto) {
-        formData.append('removeImage', 'true');
-      }
+      formData.append('name', name.trim());
 
       const response = await axios.put(
         `${import.meta.env.VITE_API_URL}/chat/user/profile`,
@@ -104,12 +168,12 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
         if (onProfileUpdate) {
           onProfileUpdate(updatedUser);
         }
-        alert('Profile updated successfully!');
+        alert('Name updated successfully!');
         onClose();
       }
     } catch (err) {
-      console.error('Error updating profile:', err);
-      alert(err.response?.data?.message || 'Failed to update profile');
+      console.error('Error updating name:', err);
+      alert(err.response?.data?.message || 'Failed to update name');
     } finally {
       setLoading(false);
     }
