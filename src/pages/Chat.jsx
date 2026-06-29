@@ -772,7 +772,7 @@ const Chat = ({ socket }) => {
   const isReceiverOnline = selectedUser && onlineUsers.includes(selectedUser._id);
 
   return (
-    <div className='min-h-screen flex flex-col md:flex-row bg-gray-900 text-gray-200'>
+    <div className='h-[100dvh] w-full flex flex-col md:flex-row bg-gray-900 text-gray-200 overflow-hidden'>
 
       {/* Mobile Header */}
       <div className='md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 rounded-b-lg shadow-lg'>
@@ -891,68 +891,68 @@ const Chat = ({ socket }) => {
                   </div>
                 )}
                 {messages.map((msg, index) => (
-                  <div
-                    key={msg._id}
-                    className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md relative group flex flex-col
-                      ${msg.sender === userId
-                        ? 'bg-blue-600 self-end text-white'
-                        : 'bg-gray-700 self-start text-white'
-                      }`}
-                  >
-                    {msg.messageType === 'image' ? (
-                      <div className="space-y-2">
-                        <img
-                          src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
-                          alt={msg.fileName || "Image"}
-                          className="max-w-full rounded cursor-pointer hover:opacity-90 max-h-60 object-contain"
-                          onClick={() => setLightboxImage(`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`)}
-                        />
-                        {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
-                      </div>
-                    ) : msg.messageType === 'file' ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3 bg-gray-800/50 p-3 rounded-lg border border-gray-700 max-w-sm">
-                          <FiFile className="text-blue-400 flex-shrink-0" size={24} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate text-gray-200">{msg.fileName}</p>
-                            <a
-                              href={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
-                              download
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1 font-semibold"
-                            >
-                              <FiDownload size={12} className="inline mr-1" /> Download
-                            </a>
-                          </div>
-                        </div>
-                        {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
-                      </div>
-                    ) : (
-                      <p className="break-words whitespace-pre-wrap">{msg.content}</p>
-                    )}
-
+                  <div key={msg._id} className={`flex w-full group ${msg.sender === userId ? 'justify-end' : 'justify-start'}`}>
                     {msg.sender === userId && (
                       <button
                         onClick={() => handleDeleteMessage(msg._id)}
-                        className="absolute top-1/2 -translate-y-1/2 -left-8 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-red-400 hover:text-red-300 p-1.5 rounded-full hover:bg-gray-800/50 transition-opacity duration-200 flex items-center justify-center"
+                        className="mr-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-red-400 hover:text-red-300 p-1.5 rounded-full hover:bg-gray-800/50 transition-opacity duration-200 flex items-center justify-center self-center"
                         title="Delete Message"
                       >
                         <FiTrash2 size={16} />
                       </button>
                     )}
+                    <div
+                      className={`p-3 rounded-lg max-w-[80%] text-sm sm:text-base shadow-md flex flex-col
+                        ${msg.sender === userId
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-white'
+                        }`}
+                    >
+                      {msg.messageType === 'image' ? (
+                        <div className="space-y-2">
+                          <img
+                            src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
+                            alt={msg.fileName || "Image"}
+                            className="max-w-full rounded cursor-pointer hover:opacity-90 max-h-60 object-contain"
+                            onClick={() => setLightboxImage(`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`)}
+                          />
+                          {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
+                        </div>
+                      ) : msg.messageType === 'file' ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3 bg-gray-800/50 p-3 rounded-lg border border-gray-700 max-w-sm">
+                            <FiFile className="text-blue-400 flex-shrink-0" size={24} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate text-gray-200">{msg.fileName}</p>
+                              <a
+                                href={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
+                                download
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1 font-semibold"
+                              >
+                                <FiDownload size={12} className="inline mr-1" /> Download
+                              </a>
+                            </div>
+                          </div>
+                          {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
+                        </div>
+                      ) : (
+                        <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+                      )}
 
-                    {msg.pending && <span className="text-gray-400 text-sm"> sending...</span>}
-                    {msg.sender === userId && msg.seen && (
-                      <span className="text-xs text-gray-300 mt-1 block text-right">
-                        ✓ seen
-                      </span>
-                    )}
-                    {msg.sender === userId && msg.error && (
-                      <span className="text-xs text-red-400 mt-1 block text-right">
-                        Failed to send
-                      </span>
-                    )}
+                      {msg.pending && <span className="text-gray-400 text-sm"> sending...</span>}
+                      {msg.sender === userId && msg.seen && (
+                        <span className="text-xs text-gray-300 mt-1 block text-right">
+                          ✓ seen
+                        </span>
+                      )}
+                      {msg.sender === userId && msg.error && (
+                        <span className="text-xs text-red-400 mt-1 block text-right">
+                          Failed to send
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -1018,7 +1018,7 @@ const Chat = ({ socket }) => {
                       value={message}
                       onChange={(e) => { setMessage(e.target.value); handleTyping(); }}
                       placeholder='Type your message...'
-                      className='flex-1 px-4 h-12 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                      className='flex-1 min-w-0 px-4 h-12 rounded-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                     />
                     <button
                       type='submit'
