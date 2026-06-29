@@ -2,12 +2,33 @@ import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IoSettingsOutline } from "react-icons/io5";
+import SettingsModal from './SettingsModal';
 
 const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeReceiverId }) => {
   const [users, setUsers] = useState([])
   const [filterUsers, setFilterUsers] = useState([])
   const navigate = useNavigate()
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/chat/user/me`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+          }
+        });
+        if (response.data.message === 'success') {
+          setCurrentUser(response.data.user);
+        }
+      } catch (err) {
+        console.error("Error fetching current user info:", err);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -94,7 +115,11 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
           onChange={handlefilter}
           className='p-2 w-full rounded-xl border border-gray-600 bg-gray-700 text-white placeholder-gray-400'
         />
-        <IoSettingsOutline className='text-gray-400 cursor-pointer hover:text-white' size={22}/>
+        <IoSettingsOutline 
+          className='text-gray-400 cursor-pointer hover:text-white transition-colors duration-200' 
+          size={22}
+          onClick={() => setIsSettingsOpen(true)}
+        />
       </div>
 
       {/* User List - Scrollable middle section */}
@@ -142,15 +167,34 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
         )}
       </div>
         
-      {/* Logout Button - Fixed at bottom */}
-      <div className='flex-shrink-0'>
-        <button
-          onClick={handleLogout}
-          className='w-full bg-red-500/80 text-white py-3 rounded-xl hover:bg-red-600 transition-colors duration-200 font-medium'
-        >
-          Logout
-        </button>
+      {/* User Profile Card - Fixed at bottom */}
+      <div className='flex-shrink-0 flex items-center justify-between p-3 bg-gray-900/50 rounded-xl border border-gray-700/50 mt-auto'>
+        <div className='flex items-center gap-3 min-w-0'>
+          {currentUser?.image ? (
+            <img
+              src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${currentUser.image}`}
+              className='w-10 h-10 rounded-full object-cover border border-gray-600 flex-shrink-0'
+              alt={currentUser.name}
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0 border border-gray-600">
+              {currentUser?.name?.charAt(0).toUpperCase() || 'U'}
+            </div>
+          )}
+          <div className='flex flex-col min-w-0'>
+            <span className='text-sm font-semibold text-gray-200 truncate'>{currentUser?.name || 'Loading...'}</span>
+            <span className='text-xs text-gray-400 truncate'>{currentUser?.email}</span>
+          </div>
+        </div>
       </div>
+
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        handleLogout={handleLogout}
+        onProfileUpdate={(updatedUser) => setCurrentUser(updatedUser)}
+        currentUser={currentUser}
+      />
     </div>
     
   )
