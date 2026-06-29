@@ -617,7 +617,7 @@ const Chat = ({ socket }) => {
 
       {/* Sidebar */}
       <div className={`
-        fixed md:static top-0 left-0 h-full w-[85%] sm:w-1/2 md:w-1/3 bg-gray-800 border-r border-gray-700 z-40
+        fixed md:static top-0 left-0 h-full md:h-screen w-[85%] sm:w-1/2 md:w-1/3 bg-gray-800 border-r border-gray-700 z-[60]
         transform transition-transform duration-300 ease-in-out rounded-r-lg shadow-xl
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0

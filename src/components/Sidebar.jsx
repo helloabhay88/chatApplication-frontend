@@ -106,7 +106,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
   };
 
   return (
-    <div className='flex flex-col h-screen max-h-screen p-4 bg-gray-800 text-gray-200'>
+    <div className='flex flex-col h-full max-h-full p-4 bg-gray-800 text-gray-200'>
       {/* Search Input - Fixed at top */}
       <div className='flex items-center gap-2 mb-4'>
         <input
