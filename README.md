@@ -1,12 +1,46 @@
-# React + Vite
+# Socketmate Chat Frontend Client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This repository houses the frontend client for the Socketmate real-time chat and WebRTC audio/video calling application. It is built as a single-page application using React, Vite, and Tailwind CSS.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Real-Time Private Messaging**: Send and receive private text messages instantly.
+- **WebRTC Audio/Video Calling**: Native peer-to-peer calling featuring real-time signaling via WebSockets.
+- **Media Device Configuration**: Custom preferences selector for camera and microphone inputs inside Settings.
+- **Profile Customization**: Live updating display name and custom avatar uploads (with avatar deletion support).
+- **Session Persistence**: Persistent session states using JSON Web Tokens (JWT) stored in LocalStorage.
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Framework**: React (v19)
+- **Build System**: Vite (v6)
+- **Styling**: Tailwind CSS
+- **WS Client**: Socket.io Client
+- **Routing**: React Router DOM (v7)
+
+## Getting Started
+
+### Prerequisites
+Ensure Node.js (v18+) is installed.
+
+### Setup and Installation
+
+1. Clone the repository and navigate to the directory:
+   ```bash
+   cd chatFront
+   ```
+2. Install the required packages:
+   ```bash
+   npm install
+   ```
+3. Configure your local environment in a `.env` file at the root of `chatFront/`:
+   ```env
+   VITE_API_URL=http://localhost:3000
+   ```
+4. Launch the local development server:
+   ```bash
+   npm run dev
+   ```
+
+## Detailed Documentation
+For complete technical details, API listings, and project architecture configurations, refer to [DOCUMENTATION.md](DOCUMENTATION.md).
