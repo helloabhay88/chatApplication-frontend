@@ -2,33 +2,12 @@ import axios from 'axios'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IoSettingsOutline } from "react-icons/io5";
-import SettingsModal from './SettingsModal';
 
-const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeReceiverId }) => {
+const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeReceiverId, currentUser, onOpenSettings }) => {
   const [users, setUsers] = useState([])
   const [filterUsers, setFilterUsers] = useState([])
   const navigate = useNavigate()
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/chat/user/me`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
-          }
-        });
-        if (response.data.message === 'success') {
-          setCurrentUser(response.data.user);
-        }
-      } catch (err) {
-        console.error("Error fetching current user info:", err);
-      }
-    };
-    fetchCurrentUser();
-  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -77,14 +56,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
     fetchUser()
   }, [])
 
-  const handleLogout = () => {
-    if (socket) {
-      socket.disconnect(); // Disconnect socket so backend knows user left
-    }
-    window.localStorage.removeItem('chat-token')
-    window.localStorage.removeItem('userId')
-    window.location.href = '/';
-  }
+
 
   const handleUserClick = (user) => {
     // Clear previous messages and set the new receiver
@@ -118,7 +90,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
         <IoSettingsOutline 
           className='text-gray-400 cursor-pointer hover:text-white transition-colors duration-200' 
           size={22}
-          onClick={() => setIsSettingsOpen(true)}
+          onClick={onOpenSettings}
         />
       </div>
 
@@ -187,14 +159,6 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
           </div>
         </div>
       </div>
-
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
-        handleLogout={handleLogout}
-        onProfileUpdate={(updatedUser) => setCurrentUser(updatedUser)}
-        currentUser={currentUser}
-      />
     </div>
     
   )

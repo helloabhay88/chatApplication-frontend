@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
+import SettingsModal from '../components/SettingsModal';
 import axios from 'axios';
 import { FiMenu, FiVideo, FiPhoneOff, FiMic, FiMicOff, FiVideoOff, FiPhone } from 'react-icons/fi';
 import { SyncLoader } from 'react-spinners';
+
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 const Chat = ({ socket }) => {
   // State for chat functionality
@@ -12,6 +15,38 @@ const Chat = ({ socket }) => {
   const [receiverId, setReceiverId] = useState();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const userId = window.localStorage.getItem('userId');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Fetch current user details
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await axios.get(`${BASE_URL}/chat/user/me`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+          }
+        });
+        if (response.data.message === 'success') {
+          setCurrentUser(response.data.user);
+        }
+      } catch (err) {
+        console.error("Error fetching current user info:", err);
+      }
+    };
+    if (userId) {
+      fetchCurrentUser();
+    }
+  }, [userId, BASE_URL]);
+
+  const handleLogout = () => {
+    if (socket) {
+      socket.disconnect();
+    }
+    window.localStorage.removeItem('chat-token');
+    window.localStorage.removeItem('userId');
+    window.location.href = '/';
+  };
   const [isTyping, setIsTyping] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
@@ -59,9 +94,6 @@ const Chat = ({ socket }) => {
   // IntersectionObserver to detect when the user scrolls to the top of the chat
   const observer = useRef(null);
   const topMessageRef = useRef(null);
-
-  // The new base URL for the deployed backend
-  const BASE_URL = import.meta.env.VITE_API_URL;
 
   // --- Utility Effects ---
   // A heartbeat interval to keep the user's socket connection alive and signal they are active
@@ -631,6 +663,8 @@ const Chat = ({ socket }) => {
           setMessages={setMessages}
           setReceiverId={setReceiverId}
           activeReceiverId={receiverId}
+          currentUser={currentUser}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
       </div>
 
@@ -822,6 +856,14 @@ const Chat = ({ socket }) => {
           </div>
         </div>
       )}
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        handleLogout={handleLogout}
+        onProfileUpdate={(updatedUser) => setCurrentUser(updatedUser)}
+        currentUser={currentUser}
+      />
     </div>
   );
 };
