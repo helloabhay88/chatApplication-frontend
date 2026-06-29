@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FiX, FiUser, FiSliders, FiLogOut, FiCamera } from 'react-icons/fi';
+import { FiX, FiUser, FiSliders, FiLogOut, FiCamera, FiTrash2 } from 'react-icons/fi';
 
 const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, currentUser }) => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -8,6 +8,7 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [shouldDeletePhoto, setShouldDeletePhoto] = useState(false);
   
   // Audio/Video state
   const [mics, setMics] = useState([]);
@@ -23,6 +24,8 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
           ? `https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${currentUser.image}` 
           : ''
       );
+      setShouldDeletePhoto(false);
+      setSelectedFile(null);
     }
   }, [currentUser, isOpen]);
 
@@ -58,6 +61,17 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
     if (file) {
       setSelectedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
+      setShouldDeletePhoto(false);
+    }
+  };
+
+  const handleDeletePhoto = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete your profile picture?")) {
+      setSelectedFile(null);
+      setPreviewUrl('');
+      setShouldDeletePhoto(true);
     }
   };
 
@@ -69,6 +83,8 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
       formData.append('name', name);
       if (selectedFile) {
         formData.append('image', selectedFile);
+      } else if (shouldDeletePhoto) {
+        formData.append('removeImage', 'true');
       }
 
       const response = await axios.put(
@@ -167,6 +183,16 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
                         {name ? name.charAt(0).toUpperCase() : 'U'}
                       </div>
                     )}
+                    {previewUrl && (
+                      <button
+                        type="button"
+                        onClick={handleDeletePhoto}
+                        className="absolute bottom-0 left-0 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full cursor-pointer shadow-md transition border-none flex items-center justify-center"
+                        title="Delete Profile Picture"
+                      >
+                        <FiTrash2 size={14} />
+                      </button>
+                    )}
                     <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 shadow-md transition">
                       <FiCamera size={14} />
                       <input 
@@ -177,7 +203,7 @@ const SettingsModal = ({ isOpen, onClose, handleLogout, onProfileUpdate, current
                       />
                     </label>
                   </div>
-                  <span className="text-xs text-gray-400">Click camera icon to change avatar</span>
+                  <span className="text-xs text-gray-400">Click camera to change, trash to remove</span>
                 </div>
 
                 <div className="space-y-2">
