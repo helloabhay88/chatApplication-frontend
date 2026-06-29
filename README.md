@@ -1,5 +1,7 @@
 # Socketmate Chat Frontend Client
 
+*   **Live Application URL:** [https://socketmate.vercel.app/](https://socketmate.vercel.app/)
+
 This repository houses the frontend client for the Socketmate real-time chat and WebRTC audio/video calling application. It is built as a single-page application using React, Vite, and Tailwind CSS.
 
 ## Features

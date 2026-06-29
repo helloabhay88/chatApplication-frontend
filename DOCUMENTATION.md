@@ -1,5 +1,7 @@
 # Project Documentation and Architecture Guide
 
+*   **Live Application URL:** [https://socketmate.vercel.app/](https://socketmate.vercel.app/)
+
 This document provides a comprehensive overview of the system architecture, directory structure, environment configuration, setup instructions, API endpoints, and WebSocket signaling mechanisms for the WebRTC Chat Application.
 
 ---
