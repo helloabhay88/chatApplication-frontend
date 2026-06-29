@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import axios from 'axios';
-import { FiMenu, FiVideo, FiPhoneOff } from 'react-icons/fi';
+import { FiMenu, FiVideo, FiPhoneOff, FiMic, FiMicOff, FiVideoOff, FiPhone } from 'react-icons/fi';
 import { SyncLoader } from 'react-spinners';
 
 const Chat = ({ socket }) => {
@@ -34,6 +34,9 @@ const Chat = ({ socket }) => {
   const [callAccepted, setCallAccepted] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [callType, setCallType] = useState('video');
 
   const myVideo = useRef();
   const userVideo = useRef();
@@ -58,8 +61,7 @@ const Chat = ({ socket }) => {
   const topMessageRef = useRef(null);
 
   // The new base URL for the deployed backend
-  const BASE_URL = "https://chatapplication-api.onrender.com";
-  //const BASE_URL = "http://localhost:3000";
+  const BASE_URL = import.meta.env.VITE_API_URL;
 
   // --- Utility Effects ---
   // A heartbeat interval to keep the user's socket connection alive and signal they are active
@@ -143,6 +145,7 @@ const Chat = ({ socket }) => {
       setCaller(data.from);
       setCallerName(data.name);
       setCallerSignal(data.signal);
+      setCallType(data.callType || 'video');
     });
 
     socket.on("callAccepted", async (signal) => {
@@ -197,21 +200,21 @@ const Chat = ({ socket }) => {
       }
     };
     
-    // This updates the 'seen' status of a sent message in real-time.
-    const handleMessageSeen = ({ messageId }) => {
+    // This updates the 'seen' status of multiple messages in bulk.
+    const handleMessagesSeenBulk = ({ seenBy }) => {
       setMessages(prevMessages =>
         prevMessages.map(msg =>
-          msg._id === messageId ? { ...msg, seen: true } : msg
+          msg.sender === userId && !msg.seen ? { ...msg, seen: true } : msg
         )
       );
     };
 
     socket.on('newMessage', handleNewMessage);
-    socket.on('messageSeen', handleMessageSeen);
+    socket.on('messagesSeenBulk', handleMessagesSeenBulk);
 
     return () => {
       socket.off('newMessage', handleNewMessage);
-      socket.off('messageSeen', handleMessageSeen);
+      socket.off('messagesSeenBulk', handleMessagesSeenBulk);
     };
   }, [socket, userId, receiverId]);
 
@@ -378,9 +381,7 @@ const Chat = ({ socket }) => {
     const unseenMessages = messages.filter(m => m.sender === receiverId && !m.seen);
     
     if (unseenMessages.length > 0) {
-      unseenMessages.forEach(m => {
-        socket.emit('messageSeen', { messageId: m._id, senderId: receiverId });
-      });
+      socket.emit('markMessagesSeen', { senderId: userId, receiverId });
       
       setMessages(prevMessages => 
         prevMessages.map(m => 
@@ -415,26 +416,18 @@ const Chat = ({ socket }) => {
     setMessages(prev => [...prev, tempMessage]);
     setShouldScrollToBottom(true);
     
-    // Fire the API request in the background concurrently
-    axios.post(
-      `${BASE_URL}/chat/message/send/${receiverId}`,
-      { content: messageContent },
-      {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
-        }
+    // Fire the socket event for sending the message
+    socket.emit('sendMessage', { senderId: userId, receiverId, content: messageContent }, (response) => {
+      if (response && response.success) {
+        setMessages(prev =>
+          prev.map(msg => msg._id === tempId ? response.message : msg)
+        );
+      } else {
+        console.error('Error sending message via socket:', response?.error);
+        setMessages(prev =>
+          prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true } : msg)
+        );
       }
-    )
-    .then((res) => {
-      setMessages(prev =>
-        prev.map(msg => msg._id === tempId ? res.data : msg)
-      );
-    })
-    .catch((error) => {
-      console.error('Error sending message:', error);
-      setMessages(prev =>
-        prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true } : msg)
-      );
     });
   };
 
@@ -471,10 +464,11 @@ const Chat = ({ socket }) => {
     return pc;
   };
 
-  const startVideoCall = async () => {
-    console.log("--> [WebRTC] startVideoCall initiated. Requesting media devices...");
+  const startCall = async (type = 'video') => {
+    console.log(`--> [WebRTC] startCall initiated. Type: ${type}. Requesting media devices...`);
+    setCallType(type);
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const currentStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
       console.log("--> [WebRTC] Media stream obtained.");
       setStream(currentStream);
       streamRef.current = currentStream;
@@ -492,11 +486,32 @@ const Chat = ({ socket }) => {
         userToCall: receiverId,
         signalData: offer,
         from: userId,
-        name: window.localStorage.getItem('userName') || "User"
+        name: window.localStorage.getItem('userName') || "User",
+        callType: type
       });
     } catch (err) {
       console.error("--> [WebRTC] Error accessing media devices:", err);
       alert("Could not access camera/microphone. Please check permissions.");
+    }
+  };
+
+  const toggleMute = () => {
+    if (stream) {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleVideo = () => {
+    if (stream) {
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsVideoOff(!videoTrack.enabled);
+      }
     }
   };
 
@@ -505,7 +520,7 @@ const Chat = ({ socket }) => {
     setCallEnded(false);
     
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const currentStream = await navigator.mediaDevices.getUserMedia({ video: callType === 'video', audio: true });
       setStream(currentStream);
       streamRef.current = currentStream;
 
@@ -527,6 +542,8 @@ const Chat = ({ socket }) => {
     setIsCalling(false);
     setCallAccepted(false);
     setReceivingCall(false);
+    setIsMuted(false);
+    setIsVideoOff(false);
     
     if (connectionRef.current) {
       connectionRef.current.close();
@@ -584,18 +601,23 @@ const Chat = ({ socket }) => {
             </>
           ) : 'Chat'}
         </h2>
-        <div className="flex items-center justify-end min-w-[2rem]">
+        <div className="flex items-center justify-end min-w-[2rem] gap-2">
           {selectedUser && isReceiverOnline && (
-            <button onClick={startVideoCall} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
-              <FiVideo size={18} />
-            </button>
+            <>
+              <button onClick={() => startCall('audio')} className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                <FiPhone size={18} />
+              </button>
+              <button onClick={() => startCall('video')} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                <FiVideo size={18} />
+              </button>
+            </>
           )}
         </div>
       </div>
 
       {/* Sidebar */}
       <div className={`
-        fixed md:static top-0 left-0 h-full w-3/4 sm:w-1/2 md:w-1/3 bg-gray-800 border-r border-gray-700 z-40
+        fixed md:static top-0 left-0 h-full w-[85%] sm:w-1/2 md:w-1/3 bg-gray-800 border-r border-gray-700 z-40
         transform transition-transform duration-300 ease-in-out rounded-r-lg shadow-xl
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0
@@ -608,6 +630,7 @@ const Chat = ({ socket }) => {
           }}
           setMessages={setMessages}
           setReceiverId={setReceiverId}
+          activeReceiverId={receiverId}
         />
       </div>
 
@@ -635,11 +658,18 @@ const Chat = ({ socket }) => {
                     ● {isReceiverOnline ? 'online' : 'offline'}
                   </span>
                 </h2>
-                {isReceiverOnline && (
-                  <button onClick={startVideoCall} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
-                    <FiVideo size={20} />
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {isReceiverOnline && (
+                    <>
+                      <button onClick={() => startCall('audio')} className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                        <FiPhone size={20} />
+                      </button>
+                      <button onClick={() => startCall('video')} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-lg transition transform hover:scale-105">
+                        <FiVideo size={20} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
 
@@ -722,7 +752,7 @@ const Chat = ({ socket }) => {
       {/* Incoming Call UI */}
       {receivingCall && !callAccepted && (
         <div className="absolute top-20 right-4 z-[60] bg-gray-800 p-5 rounded-xl shadow-2xl border border-gray-600 flex flex-col items-center transform transition-all">
-          <h3 className="text-white font-semibold mb-4 text-lg">{callerName || 'Someone'} is calling...</h3>
+          <h3 className="text-white font-semibold mb-4 text-lg">{callerName || 'Someone'} is calling... ({callType})</h3>
           <div className="flex gap-4">
             <button onClick={answerCall} className="bg-green-500 hover:bg-green-600 px-6 py-2 rounded-lg text-white font-medium shadow">Answer</button>
             <button onClick={() => endCall(true)} className="bg-red-500 hover:bg-red-600 px-6 py-2 rounded-lg text-white font-medium shadow">Decline</button>
@@ -734,35 +764,61 @@ const Chat = ({ socket }) => {
       {(isCalling || callAccepted) && !callEnded && (
         <div className="absolute inset-0 z-[60] bg-gray-900 flex flex-col p-4">
           <div className="flex-1 flex flex-col md:flex-row gap-4 relative">
-            {/* Remote Video */}
+            {/* Remote Media */}
             {callAccepted ? (
-              <div className="flex-1 bg-black rounded-lg overflow-hidden flex items-center justify-center border border-gray-700 shadow-inner">
-                <video playsInline ref={userVideo} autoPlay className="w-full h-full object-contain" />
+              <div className="flex-1 bg-black rounded-lg overflow-hidden flex items-center justify-center border border-gray-700 shadow-inner relative">
+                <video playsInline ref={userVideo} autoPlay className={`w-full h-full object-contain ${callType === 'audio' ? 'hidden' : ''}`} />
+                {callType === 'audio' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                    <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.8)] animate-pulse">
+                      <FiPhone size={40} className="text-white" />
+                    </div>
+                    <p className="text-xl font-semibold text-gray-300 tracking-wide">Audio Call</p>
+                  </div>
+                )}
               </div>
             ) : (
               isCalling && (
-                <div className="flex-1 bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center border border-gray-700 shadow-inner">
+                <div className="flex-1 bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center border border-gray-700 shadow-inner relative">
                   <SyncLoader color="#3B82F6" />
                   <p className="mt-6 text-gray-400 text-lg animate-pulse">Ringing {selectedUser?.name || 'User'}...</p>
                 </div>
               )
             )}
       
-            {/* Local Video (PiP) */}
+            {/* Local Media (PiP) */}
             {stream && (
-              <div className="absolute bottom-4 right-4 w-32 md:w-48 h-48 md:h-64 bg-black rounded-lg overflow-hidden shadow-2xl border-2 border-gray-600">
-                <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-contain" />
+              <div className={`absolute top-4 right-4 md:bottom-4 md:top-auto md:right-4 w-28 h-40 md:w-48 md:h-64 bg-black rounded-xl overflow-hidden shadow-2xl border-2 border-gray-600 z-50 ${callType === 'audio' ? 'hidden' : ''}`}>
+                <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-cover" />
               </div>
             )}
 
-            {/* Floating End Call Button */}
-            <button
-              onClick={() => endCall(true)}
-              className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white p-4 sm:p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)] transition-all hover:scale-110 hover:shadow-[0_0_25px_rgba(220,38,38,0.9)] flex items-center justify-center z-50 group"
-              title="End Call"
-            >
-              <FiPhoneOff size={28} className="group-hover:animate-pulse" />
-            </button>
+            {/* Call Controls */}
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 md:gap-6 z-50 bg-gray-900/60 p-3 md:p-4 rounded-full backdrop-blur-md shadow-2xl border border-gray-700">
+              <button
+                onClick={toggleMute}
+                className={`p-3 md:p-4 rounded-full shadow-lg transition-all hover:scale-110 flex items-center justify-center ${isMuted ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                title={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted ? <FiMicOff size={22} /> : <FiMic size={22} />}
+              </button>
+              
+              <button
+                onClick={() => endCall(true)}
+                className="bg-red-600 hover:bg-red-700 text-white p-4 md:p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)] transition-all hover:scale-110 flex items-center justify-center group"
+                title="End Call"
+              >
+                <FiPhoneOff size={26} className="group-hover:animate-pulse" />
+              </button>
+
+              <button
+                onClick={toggleVideo}
+                className={`p-3 md:p-4 rounded-full shadow-lg transition-all hover:scale-110 flex items-center justify-center ${isVideoOff ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                title={isVideoOff ? "Turn Video On" : "Turn Video Off"}
+              >
+                {isVideoOff ? <FiVideoOff size={22} /> : <FiVideo size={22} />}
+              </button>
+            </div>
           </div>
         </div>
       )}

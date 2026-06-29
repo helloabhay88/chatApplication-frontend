@@ -22,7 +22,7 @@ const ForgotPassword = () => {
       delay = setTimeout(() => {
         setDelayMessage('Server is waking up... This may take up to a minute.')
       }, 3000)
-      const response = await axios.post('https://chatapplication-api.onrender.com/forgot-password/forgot-verify', { email})
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/forgot-password/forgot-verify`, { email})
       setLinkmessage(true);
       clearTimeout(delay)
       setDelayMessage('')

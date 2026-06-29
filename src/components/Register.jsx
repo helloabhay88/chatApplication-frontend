@@ -30,7 +30,7 @@ const Register = () => {
        delay=setTimeout(()=>{
         setDelayMessage('Server is waking up... This may take up to a minute.')
       }, 3000)
-      const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/register', formData)
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/chat/user/register`, formData)
       clearTimeout(delay)
       setDelayMessage('')
       if (response.data.message === "success") {

@@ -22,7 +22,7 @@ const ResetPassword = () => {
                 alert("Passwords do not match");
                 return;
             }
-            const response = await axios.post(`https://chatapplication-api.onrender.com/reset-password/${id}/${token}`, { password })
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/reset-password/${id}/${token}`, { password })
             if (response.data.message === "password changed successfully") {
                 navigate("/")
             }

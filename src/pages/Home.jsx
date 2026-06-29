@@ -18,7 +18,7 @@ const Home = () => {
         const token = localStorage.getItem('chat-token')
         if (!token) return
 
-        const response = await axios.get('https://chatapplication-api.onrender.com/chat/user/verify', {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/chat/user/verify`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -43,7 +43,7 @@ const Home = () => {
       delay = setTimeout(() => {
         setDelayMessage('Server is waking up... This may take up to a minute.')
       }, 3000)
-      const response = await axios.post('https://chatapplication-api.onrender.com/chat/user/', { email, password })
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/chat/user/`, { email, password })
       clearTimeout(delay)
       setDelayMessage('')
       if (response.data.message === "success") {
