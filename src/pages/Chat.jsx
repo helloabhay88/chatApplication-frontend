@@ -80,7 +80,6 @@ const Chat = ({ socket }) => {
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
   const screenStreamRef = useRef(null);
@@ -118,9 +117,8 @@ const Chat = ({ socket }) => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         socket.emit('user-online', userId);
-      } else {
-        socket.emit('user-offline', userId);
       }
+      // Do not emit user-offline when hidden, otherwise background sockets get deleted from the server's routing map!
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     if (document.visibilityState === 'visible') {
@@ -128,7 +126,6 @@ const Chat = ({ socket }) => {
     }
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      socket.emit('user-offline', userId);
     };
   }, [socket, userId]);
 
@@ -460,51 +457,70 @@ const Chat = ({ socket }) => {
     // Capture data and clear input immediately
     const tempId = Date.now();
     const messageContent = message;
-    setMessage('');
+    const fileToSend = selectedFile;
+    const previewUrl = filePreview;
     
-    if (selectedFile) {
-      setIsUploading(true);
-      try {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
+    setMessage('');
+    setSelectedFile(null);
+    setFilePreview(null);
+    
+    if (fileToSend) {
+      // Add a temporary message for the file upload to the UI immediately
+      const tempMessage = {
+        _id: tempId,
+        sender: userId,
+        content: messageContent,
+        messageType: fileToSend.type.startsWith('image/') ? 'image' : 'file',
+        fileUrl: previewUrl, // Use local blob URL for immediate preview
+        fileName: fileToSend.name,
+        createdAt: new Date(),
+        pending: true,
+        uploading: true
+      };
+      setMessages(prev => [...prev, tempMessage]);
+      setShouldScrollToBottom(true);
 
-        const response = await axios.post(`${BASE_URL}/chat/message/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+      // Perform upload in background
+      (async () => {
+        try {
+          const formData = new FormData();
+          formData.append('file', fileToSend);
+
+          const response = await axios.post(`${BASE_URL}/chat/message/upload`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Bearer ${localStorage.getItem('chat-token')}`
+            }
+          });
+
+          const { url, name, type, publicId } = response.data;
+
+          const payload = {
+            senderId: userId,
+            receiverId,
+            messageType: type,
+            fileUrl: url,
+            fileName: name,
+            publicId: publicId,
+          };
+          if (messageContent) {
+            payload.content = messageContent;
           }
-        });
 
-        const { url, name, type } = response.data;
-
-        const payload = {
-          senderId: userId,
-          receiverId,
-          messageType: type,
-          fileUrl: url,
-          fileName: name,
-        };
-        if (messageContent) {
-          payload.content = messageContent;
+          socket.emit('sendMessage', payload, (res) => {
+            if (res && res.success) {
+              setMessages(prev => prev.map(msg => msg._id === tempId ? res.message : msg));
+              setShouldScrollToBottom(true);
+            } else {
+              console.error('Error sending file message via socket:', res?.error);
+              setMessages(prev => prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true, uploading: false } : msg));
+            }
+          });
+        } catch (err) {
+          console.error("Error uploading file:", err);
+          setMessages(prev => prev.map(msg => msg._id === tempId ? { ...msg, pending: false, error: true, uploading: false } : msg));
         }
-
-        setSelectedFile(null);
-        setFilePreview(null);
-        setIsUploading(false);
-
-        socket.emit('sendMessage', payload, (res) => {
-          if (res && res.success) {
-            setMessages(prev => [...prev, res.message]);
-            setShouldScrollToBottom(true);
-          } else {
-            console.error('Error sending file message via socket:', res?.error);
-          }
-        });
-      } catch (err) {
-        console.error("Error uploading file:", err);
-        alert("Failed to upload file.");
-        setIsUploading(false);
-      }
+      })();
     } else {
       const tempMessage = {
         _id: tempId,
@@ -565,8 +581,8 @@ const Chat = ({ socket }) => {
         const screenTrack = screenStream.getVideoTracks()[0];
 
         if (connectionRef.current) {
-          const senders = connectionRef.current.getSenders();
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          const transceivers = connectionRef.current.getTransceivers();
+          const videoSender = transceivers.find(t => t.receiver.track.kind === 'video')?.sender;
           if (videoSender) {
             await videoSender.replaceTrack(screenTrack);
           }
@@ -595,21 +611,46 @@ const Chat = ({ socket }) => {
       }
       setIsScreenSharing(false);
 
-      const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      const cameraTrack = cameraStream.getVideoTracks()[0];
+      let cameraStream = null;
+      let cameraTrack = null;
 
-      if (connectionRef.current) {
-        const senders = connectionRef.current.getSenders();
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-        if (videoSender) {
-          await videoSender.replaceTrack(cameraTrack);
+      // Only attempt to turn the camera back on if it was originally a video call
+      if (callType === 'video') {
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          cameraTrack = cameraStream.getVideoTracks()[0];
+          setStream(cameraStream);
+          streamRef.current = cameraStream;
+        } catch (err) {
+          console.warn("Could not revert to camera, falling back to audio only");
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          setStream(cameraStream);
+          streamRef.current = cameraStream;
         }
+      } else {
+        // If it was an audio call, we just revert to audio-only stream
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        setStream(cameraStream);
+        streamRef.current = cameraStream;
       }
 
-      setStream(cameraStream);
-      streamRef.current = cameraStream;
+      if (connectionRef.current) {
+        const transceivers = connectionRef.current.getTransceivers();
+        const videoSender = transceivers.find(t => t.receiver.track.kind === 'video')?.sender;
+        if (videoSender) {
+          // Replace with camera track if available, or null to disable the video channel completely
+          await videoSender.replaceTrack(cameraTrack || null);
+        }
+        
+        // Ensure audio track is preserved
+        const audioTrack = cameraStream.getAudioTracks()[0];
+        const audioSender = transceivers.find(t => t.receiver.track.kind === 'audio')?.sender;
+        if (audioSender && audioTrack) {
+          await audioSender.replaceTrack(audioTrack);
+        }
+      }
     } catch (err) {
-      console.error("Error stopping screen share and reverting to camera:", err);
+      console.error("Error stopping screen share and reverting media:", err);
     }
   };
 
@@ -635,12 +676,38 @@ const Chat = ({ socket }) => {
 
     pc.ontrack = (event) => {
       if (userVideo.current) {
-        userVideo.current.srcObject = event.streams[0];
+        // If there's an existing stream, add the track, otherwise set the srcObject
+        if (userVideo.current.srcObject) {
+          event.streams[0].getTracks().forEach(t => userVideo.current.srcObject.addTrack(t));
+        } else {
+          userVideo.current.srcObject = event.streams[0];
+        }
       }
     };
 
+    // Pre-negotiate both audio and video channels so we can dynamically add a screen share track during an audio call without needing a complex SDP renegotiation
+    // ONLY do this if we are initiating the call! The receiver automatically creates transceivers based on the incoming offer.
+    if (isInitiator) {
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+      pc.addTransceiver('video', { direction: 'sendrecv' });
+    }
+
     if (currentStream) {
-      currentStream.getTracks().forEach(track => pc.addTrack(track, currentStream));
+      const audioTrack = currentStream.getAudioTracks()[0];
+      const videoTrack = currentStream.getVideoTracks()[0];
+      
+      if (isInitiator) {
+        const transceivers = pc.getTransceivers();
+        const audioTransceiver = transceivers.find(t => t.receiver.track.kind === 'audio');
+        const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video');
+
+        if (audioTrack && audioTransceiver) audioTransceiver.sender.replaceTrack(audioTrack);
+        if (videoTrack && videoTransceiver) videoTransceiver.sender.replaceTrack(videoTrack);
+      } else {
+        // If answering, just add the tracks normally! They will automatically map to the transceivers from the remote offer.
+        if (audioTrack) pc.addTrack(audioTrack, currentStream);
+        if (videoTrack) pc.addTrack(videoTrack, currentStream);
+      }
     }
 
     return pc;
@@ -650,8 +717,21 @@ const Chat = ({ socket }) => {
     console.log(`--> [WebRTC] startCall initiated. Type: ${type}. Requesting media devices...`);
     setCallType(type);
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
-      console.log("--> [WebRTC] Media stream obtained.");
+      let currentStream = null;
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
+      } catch (mediaErr) {
+        console.warn("--> [WebRTC] Could not get requested video/audio, falling back to audio only...", mediaErr);
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          setIsVideoOff(true);
+        } catch (audioErr) {
+          console.warn("--> [WebRTC] Total media failure (no mic/cam or permission denied). Proceeding in receive-only mode.");
+          setIsVideoOff(true);
+          setIsMuted(true);
+        }
+      }
+      console.log("--> [WebRTC] Media stream obtained (or null).");
       setStream(currentStream);
       streamRef.current = currentStream;
       setIsCalling(true);
@@ -672,8 +752,8 @@ const Chat = ({ socket }) => {
         callType: type
       });
     } catch (err) {
-      console.error("--> [WebRTC] Error accessing media devices:", err);
-      alert("Could not access camera/microphone. Please check permissions.");
+      console.error("--> [WebRTC] Fatal error initiating call:", err);
+      alert("An error occurred while trying to start the call.");
     }
   };
 
@@ -702,7 +782,20 @@ const Chat = ({ socket }) => {
     setCallEnded(false);
     
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: callType === 'video', audio: true });
+      let currentStream = null;
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({ video: callType === 'video', audio: true });
+      } catch (mediaErr) {
+        console.warn("--> [WebRTC] Could not get requested video/audio for answer, falling back to audio only...", mediaErr);
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          setIsVideoOff(true);
+        } catch (audioErr) {
+          console.warn("--> [WebRTC] Total media failure on answer. Proceeding in receive-only mode.");
+          setIsVideoOff(true);
+          setIsMuted(true);
+        }
+      }
       setStream(currentStream);
       streamRef.current = currentStream;
 
@@ -715,7 +808,7 @@ const Chat = ({ socket }) => {
 
       socket.emit("answerCall", { signal: answer, to: caller });
     } catch (err) {
-      console.error("--> [WebRTC] Error accessing media devices:", err);
+      console.error("--> [WebRTC] Fatal error answering call:", err);
     }
   };
 
@@ -911,10 +1004,10 @@ const Chat = ({ socket }) => {
                       {msg.messageType === 'image' ? (
                         <div className="space-y-2">
                           <img
-                            src={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
+                            src={msg.fileUrl?.startsWith('http') ? msg.fileUrl : `https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
                             alt={msg.fileName || "Image"}
                             className="max-w-full rounded cursor-pointer hover:opacity-90 max-h-60 object-contain"
-                            onClick={() => setLightboxImage(`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`)}
+                            onClick={() => setLightboxImage(msg.fileUrl?.startsWith('http') ? msg.fileUrl : `https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`)}
                           />
                           {msg.content && <p className="break-words whitespace-pre-wrap">{msg.content}</p>}
                         </div>
@@ -925,12 +1018,12 @@ const Chat = ({ socket }) => {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate text-gray-200">{msg.fileName}</p>
                               <a
-                                href={`https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}`}
-                                download
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1 font-semibold"
-                              >
+                              href={msg.fileUrl?.startsWith('http') ? msg.fileUrl : `https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}.${msg.fileName?.split('.').pop() || 'pdf'}`}
+                              download={msg.fileName}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-1 font-semibold"
+                            >
                                 <FiDownload size={12} className="inline mr-1" /> Download
                               </a>
                             </div>
@@ -941,7 +1034,13 @@ const Chat = ({ socket }) => {
                         <p className="break-words whitespace-pre-wrap">{msg.content}</p>
                       )}
 
-                      {msg.pending && <span className="text-gray-400 text-sm"> sending...</span>}
+                      {msg.uploading && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <SyncLoader color={msg.sender === userId ? "#ffffff" : "#3B82F6"} size={5} />
+                          <span className="text-xs opacity-80">Uploading...</span>
+                        </div>
+                      )}
+                      {!msg.uploading && msg.pending && <span className="text-gray-400 text-sm"> sending...</span>}
                       {msg.sender === userId && msg.seen && (
                         <span className="text-xs text-gray-300 mt-1 block text-right">
                           ✓ seen
@@ -989,11 +1088,6 @@ const Chat = ({ socket }) => {
                       >
                         ✕
                       </button>
-                    </div>
-                  )}
-                  {isUploading && (
-                    <div className="text-sm text-blue-400 mb-2 animate-pulse self-start">
-                      Uploading file...
                     </div>
                   )}
                   <form 
@@ -1113,7 +1207,7 @@ const Chat = ({ socket }) => {
                 {isVideoOff ? <FiVideoOff size={22} /> : <FiVideo size={22} />}
               </button>
 
-              {callAccepted && callType === 'video' && (
+              {callAccepted && (
                 <button
                   onClick={toggleScreenShare}
                   className={`p-3 md:p-4 rounded-full shadow-lg transition-all hover:scale-110 flex items-center justify-center ${isScreenSharing ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(22,163,74,0.5)]' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
