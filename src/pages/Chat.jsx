@@ -1018,7 +1018,7 @@ const Chat = ({ socket }) => {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate text-gray-200">{msg.fileName}</p>
                               <a
-                              href={msg.fileUrl?.startsWith('http') ? msg.fileUrl : `https://res.cloudinary.com/dqp7w0fvl/image/upload/v1752851774/${msg.fileUrl}.${msg.fileName?.split('.').pop() || 'pdf'}`}
+                              href={msg.fileUrl?.startsWith('http') ? msg.fileUrl.replace('/upload/', '/upload/fl_attachment/') : `https://res.cloudinary.com/dqp7w0fvl/raw/upload/fl_attachment/v1752851774/${msg.fileUrl}.${msg.fileName?.split('.').pop() || 'pdf'}`}
                               download={msg.fileName}
                               target="_blank"
                               rel="noopener noreferrer"
