@@ -94,6 +94,22 @@ Real-time peer connections use a standard WebRTC negotiation flow via WebSockets
 
 ---
 
+## Issues Faced and Resolutions
+
+### 1. Excessive User Data Exposure in Directory XHR Response (OWASP API3:2023)
+* **Issue**: The `GET /chat/users` endpoint returned full user objects including sensitive email addresses and internal database version keys (`__v`) over the browser network tab.
+* **Resolution**: Replaced negative field exclusion (`.select('-password')`) with an explicit whitelist projection (`.select('_id name image')`) in `userController.js`. Updated `Sidebar.jsx` avatar image `alt` attributes to use `user.name`, completely removing the need to expose user email addresses across the public chat directory.
+
+### 2. Lack of Rate Limiting on Login Endpoint (Brute-Force Risk)
+* **Issue**: Unrestricted authentication attempts on `POST /chat/user` left the application open to automated brute-force password guessing attacks.
+* **Resolution**: Implemented in-memory rate limiting and lockout logic in `authController.js`. Failed login attempts are tracked by client IP and target email (`${clientIp}_${email}`). Upon 3 consecutive failures, the system enforces a 1-minute (60-second) lockout returning HTTP `429 Too Many Requests`. Successful logins clear the failure record.
+
+### 3. Debug Logging Exposing Active Online User Map Keys
+* **Issue**: Server socket event handlers logged `Object.keys(onlineUsers)` to server console output during WebRTC signaling errors (`callUser` and `answerCall`), exposing active user IDs in server stdout logs.
+* **Resolution**: Identified sensitive debug log statements in `socket.js` and established sanitized logging practices to log specific failure event details instead of dumping full online user maps.
+
+---
+
 ## Directory Structure
 
 ```

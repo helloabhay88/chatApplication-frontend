@@ -111,7 +111,7 @@ const Sidebar = ({ socket, onSelectUser, setReceiverId, setMessages, activeRecei
                     width="40"
                     height="40"
                     className='rounded-full object-cover w-10 h-10'
-                    alt={user.email}
+                    alt={user.name}
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white flex-shrink-0">
