@@ -108,6 +108,10 @@ Real-time peer connections use a standard WebRTC negotiation flow via WebSockets
 * **Issue**: Server socket event handlers logged `Object.keys(onlineUsers)` to server console output during WebRTC signaling errors (`callUser` and `answerCall`), exposing active user IDs in server stdout logs.
 * **Resolution**: Identified sensitive debug log statements in `socket.js` and established sanitized logging practices to log specific failure event details instead of dumping full online user maps.
 
+### 4. Client-Side User ID Tampering / Identity Spoofing in LocalStorage (IDOR / BOLA)
+* **Issue**: The application relied on `localStorage.getItem('userId')` passed in socket event payloads (`sendMessage`, `typing`, `callUser`) as the sender identity. Modifying `userId` in Browser DevTools LocalStorage allowed spoofing sender identity and sending messages as another user.
+* **Resolution**: Configured Socket.io client in `App.jsx` to pass the JWT authentication token during handshake (`auth: { token }`). Implemented `jwt.verify` socket authentication middleware in `socket.js` to set `socket.userId`. Updated all socket event handlers to override incoming `senderId`/`from` payload fields with `socket.userId`, preventing identity spoofing regardless of client-side LocalStorage modifications.
+
 ---
 
 ## Directory Structure

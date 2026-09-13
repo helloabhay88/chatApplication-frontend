@@ -7,7 +7,11 @@ import io from 'socket.io-client'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
-const socket=io.connect(import.meta.env.VITE_API_URL)
+const socket = io.connect(import.meta.env.VITE_API_URL, {
+  auth: (cb) => {
+    cb({ token: localStorage.getItem('chat-token') });
+  }
+});
 function App() {
 
   return (
